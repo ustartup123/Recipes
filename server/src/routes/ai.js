@@ -10,7 +10,7 @@ function getGeminiModel() {
     throw new Error('GEMINI_API_KEY is not set');
   }
   const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
 // POST parse recipe from URL
@@ -21,20 +21,58 @@ router.post('/parse-url', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Fetch the webpage
-    const response = await fetch(url);
+    // Fetch the webpage with browser-like headers
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8'
+      }
+    });
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Extract text content and images
-    $('script, style, nav, footer, header').remove();
-    const pageText = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
+    // Try to extract JSON-LD recipe schema first (most recipe sites have this)
+    let recipeSchema = null;
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const data = JSON.parse($(el).html());
+        const findRecipe = (obj) => {
+          if (!obj) return null;
+          if (obj['@type'] === 'Recipe') return obj;
+          if (Array.isArray(obj)) {
+            for (const item of obj) {
+              const found = findRecipe(item);
+              if (found) return found;
+            }
+          }
+          if (obj['@graph']) return findRecipe(obj['@graph']);
+          return null;
+        };
+        const found = findRecipe(data);
+        if (found) recipeSchema = found;
+      } catch {}
+    });
 
     // Find the best image
     let imageUrl = null;
     const ogImage = $('meta[property="og:image"]').attr('content');
     if (ogImage) {
       imageUrl = ogImage.startsWith('http') ? ogImage : new URL(ogImage, url).href;
+    }
+    if (recipeSchema?.image) {
+      const img = Array.isArray(recipeSchema.image) ? recipeSchema.image[0] : recipeSchema.image;
+      imageUrl = typeof img === 'string' ? img : img?.url || imageUrl;
+    }
+
+    // Extract text content - prefer schema, fallback to page text
+    let pageText;
+    if (recipeSchema) {
+      pageText = JSON.stringify(recipeSchema).substring(0, 8000);
+    } else {
+      const $clean = cheerio.load(html);
+      $clean('script, style, nav, footer, header').remove();
+      pageText = $clean('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
     }
 
     // Use Gemini to parse the recipe
