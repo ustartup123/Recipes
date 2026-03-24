@@ -65,19 +65,81 @@ router.post('/parse-url', async (req, res) => {
       imageUrl = typeof img === 'string' ? img : img?.url || imageUrl;
     }
 
-    // Extract text content - prefer schema, fallback to page text
-    let pageText;
+    // Extract content using multiple strategies for best results
+    const contentParts = [];
+
+    // Strategy 1: JSON-LD schema (structured data - best source)
     if (recipeSchema) {
-      pageText = JSON.stringify(recipeSchema).substring(0, 8000);
-    } else {
-      const $clean = cheerio.load(html);
-      $clean('script, style, nav, footer, header').remove();
-      pageText = $clean('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
+      contentParts.push('=== STRUCTURED RECIPE DATA (JSON-LD) ===\n' + JSON.stringify(recipeSchema, null, 2));
     }
 
-    // Use Gemini to parse the recipe
+    // Strategy 2: Microdata recipe attributes
+    const microdataText = [];
+    $('[itemtype*="Recipe"], [itemprop]').each((_, el) => {
+      const prop = $(el).attr('itemprop');
+      const text = $(el).text().trim();
+      if (prop && text && text.length < 500) {
+        microdataText.push(`${prop}: ${text}`);
+      }
+    });
+    if (microdataText.length > 0) {
+      contentParts.push('=== MICRODATA ===\n' + microdataText.join('\n'));
+    }
+
+    // Strategy 3: Extract from common recipe page selectors
+    const recipeSelectors = [
+      '.recipe-content', '.recipe-body', '.recipe',
+      '[class*="recipe"]', '[class*="ingredient"]', '[class*="instruction"]',
+      '[class*="direction"]', '[class*="method"]', '[class*="step"]',
+      'article', '.entry-content', '.post-content', '.content',
+      'main'
+    ];
+    const $clean = cheerio.load(html);
+    $clean('script, style, nav, footer, header, aside, [class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [id*="comment"], [id*="sidebar"], [id*="ad"]').remove();
+
+    let mainContent = '';
+    for (const selector of recipeSelectors) {
+      const text = $clean(selector).text().replace(/\s+/g, ' ').trim();
+      if (text.length > 200) {
+        mainContent = text;
+        break;
+      }
+    }
+    if (!mainContent) {
+      mainContent = $clean('body').text().replace(/\s+/g, ' ').trim();
+    }
+
+    // Also extract list items which often contain ingredients/steps
+    const listItems = [];
+    $clean('li, ol li, ul li').each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 5 && text.length < 500) {
+        listItems.push(text);
+      }
+    });
+    if (listItems.length > 0) {
+      contentParts.push('=== LIST ITEMS FROM PAGE ===\n' + listItems.slice(0, 60).join('\n'));
+    }
+
+    contentParts.push('=== PAGE TEXT CONTENT ===\n' + mainContent.substring(0, 12000));
+
+    // Get the page title
+    const pageTitle = $('title').text().trim() || $('h1').first().text().trim();
+    const metaDescription = $('meta[name="description"]').attr('content') || '';
+
+    const fullContent = contentParts.join('\n\n').substring(0, 20000);
+
+    // Use Gemini to parse the recipe - with a robust prompt
     const model = getGeminiModel();
-    const prompt = `Extract a recipe from the following webpage text. Return ONLY valid JSON with this structure:
+    const prompt = `You are an expert recipe extractor. Below is raw content scraped from a recipe webpage. The content is MESSY and contains lots of irrelevant text (ads, navigation, comments, related articles, etc.).
+
+Your job: IGNORE all the noise and extract ONLY the recipe information.
+
+Page title: "${pageTitle}"
+Page description: "${metaDescription}"
+URL: ${url}
+
+Return ONLY valid JSON with this exact structure:
 {
   "title": "recipe title in Hebrew",
   "ingredients": [{"name": "ingredient name in Hebrew", "amount": "amount with unit"}],
@@ -85,13 +147,16 @@ router.post('/parse-url', async (req, res) => {
   "tags": ["tag1", "tag2"]
 }
 
-Important:
-- Translate everything to Hebrew
-- Each instruction step must include the specific amounts of ingredients mentioned in that step
-- Tags should be in Hebrew (e.g., "עוגות", "בשרי", "טבעוני", "קינוחים")
+Critical rules:
+- Translate EVERYTHING to Hebrew (title, ingredients, instructions, tags)
+- Each instruction step MUST include the specific amounts of ingredients mentioned in that step (e.g., "לערבב 500 גרם קמח עם ליטר מים" not just "לערבב קמח עם מים")
+- Tags should be relevant Hebrew food categories (e.g., "עוגות", "בשרי", "טבעוני", "קינוחים", "ארוחת ערב", "מרקים")
+- Focus ONLY on the actual recipe - ignore comments, ads, "related recipes", author bio, etc.
+- If there are multiple recipes on the page, extract only the main/primary recipe
+- Keep ingredient amounts in their original measurement units, just translate the unit name to Hebrew
 
-Webpage text:
-${pageText}`;
+=== RAW PAGE CONTENT (extract the recipe from this mess) ===
+${fullContent}`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();

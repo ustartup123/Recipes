@@ -11,9 +11,31 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : null;
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : {}));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Simple rate limiter for AI endpoints (prevent API key abuse)
+const aiRateLimit = new Map();
+const AI_RATE_LIMIT = 30; // max requests per window
+const AI_RATE_WINDOW = 60 * 1000; // 1 minute
+app.use('/api/ai', (req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const entry = aiRateLimit.get(ip);
+  if (!entry || now - entry.start > AI_RATE_WINDOW) {
+    aiRateLimit.set(ip, { start: now, count: 1 });
+    return next();
+  }
+  entry.count++;
+  if (entry.count > AI_RATE_LIMIT) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  next();
+});
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
