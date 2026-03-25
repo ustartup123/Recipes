@@ -10,7 +10,7 @@ import LoginPage from './pages/LoginPage';
 import './App.css';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, authEnabled } = useAuth();
 
   if (loading) {
     return (
@@ -21,7 +21,8 @@ function AppContent() {
     );
   }
 
-  if (!user) {
+  // If auth is enabled and user not logged in, show login
+  if (authEnabled && !user) {
     return <LoginPage />;
   }
 

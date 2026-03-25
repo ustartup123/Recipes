@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [clientId, setClientId] = useState(null);
+  const [authEnabled, setAuthEnabled] = useState(true);
 
   // Load saved session
   useEffect(() => {
@@ -22,11 +23,23 @@ export function AuthProvider({ children }) {
   // Fetch Google Client ID from backend
   useEffect(() => {
     fetch('/api/auth/client-id')
-      .then(res => res.json())
-      .then(data => {
-        if (data.clientId) setClientId(data.clientId);
+      .then(res => {
+        if (!res.ok) {
+          // Auth not configured - run in open mode
+          setAuthEnabled(false);
+          setUser({ id: 'anonymous', name: 'Anonymous', email: '' });
+          return null;
+        }
+        return res.json();
       })
-      .catch(() => {});
+      .then(data => {
+        if (data?.clientId) setClientId(data.clientId);
+      })
+      .catch(() => {
+        // Server error - run in open mode
+        setAuthEnabled(false);
+        setUser({ id: 'anonymous', name: 'Anonymous', email: '' });
+      });
   }, []);
 
   const login = useCallback(async (credential) => {
@@ -50,14 +63,13 @@ export function AuthProvider({ children }) {
     setToken(null);
     localStorage.removeItem('recipes_user');
     localStorage.removeItem('recipes_token');
-    // Revoke Google session
     if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect();
     }
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, clientId, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, clientId, authEnabled, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

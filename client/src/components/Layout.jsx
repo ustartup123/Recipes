@@ -4,7 +4,7 @@ import { GiCookingPot } from 'react-icons/gi';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, authEnabled, logout } = useAuth();
 
   return (
     <div className="layout">
@@ -19,7 +19,7 @@ export default function Layout({ children }) {
               <FiPlus />
               מתכון חדש
             </Link>
-            {user && (
+            {authEnabled && user && user.id !== 'anonymous' && (
               <div className="user-menu">
                 {user.picture && (
                   <img src={user.picture} alt={user.name} className="user-avatar" referrerPolicy="no-referrer" />

@@ -44,10 +44,18 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../../client/dist')));
 }
 
+// Auth: if GOOGLE_CLIENT_ID is set, require authentication; otherwise run open
+const authEnabled = !!process.env.GOOGLE_CLIENT_ID;
+const maybeAuth = authEnabled ? authMiddleware : (req, res, next) => {
+  // No auth - assign a default anonymous user so routes work
+  req.user = { id: 'anonymous', email: 'anonymous', name: 'Anonymous' };
+  next();
+};
+
 // API Routes
 app.use('/api/auth', authRouter);
-app.use('/api/recipes', authMiddleware, recipesRouter);
-app.use('/api/ai', authMiddleware, aiRouter);
+app.use('/api/recipes', maybeAuth, recipesRouter);
+app.use('/api/ai', maybeAuth, aiRouter);
 
 // SPA fallback for production
 if (process.env.NODE_ENV === 'production') {
