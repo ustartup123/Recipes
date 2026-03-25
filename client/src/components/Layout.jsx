@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiLogOut } from 'react-icons/fi';
 import { GiCookingPot } from 'react-icons/gi';
+import { useAuth } from '../context/AuthContext';
 
 export default function Layout({ children }) {
+  const { user, logout } = useAuth();
+
   return (
     <div className="layout">
       <nav className="navbar">
@@ -16,6 +19,16 @@ export default function Layout({ children }) {
               <FiPlus />
               מתכון חדש
             </Link>
+            {user && (
+              <div className="user-menu">
+                {user.picture && (
+                  <img src={user.picture} alt={user.name} className="user-avatar" referrerPolicy="no-referrer" />
+                )}
+                <button onClick={logout} className="btn-icon" title="התנתק">
+                  <FiLogOut />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </nav>

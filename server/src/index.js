@@ -6,6 +6,8 @@ const path = require('path');
 const { initDatabase } = require('./database');
 const recipesRouter = require('./routes/recipes');
 const aiRouter = require('./routes/ai');
+const authRouter = require('./routes/auth');
+const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,8 +45,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // API Routes
-app.use('/api/recipes', recipesRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/recipes', authMiddleware, recipesRouter);
+app.use('/api/ai', authMiddleware, aiRouter);
 
 // SPA fallback for production
 if (process.env.NODE_ENV === 'production') {

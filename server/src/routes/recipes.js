@@ -4,28 +4,29 @@ const { getDb } = require('../database');
 
 const router = express.Router();
 
-// GET all recipes
+// GET all recipes (for current user)
 router.get('/', (req, res) => {
   try {
     const db = getDb();
+    const userId = req.user.id;
     const { search, tag } = req.query;
 
     let recipes;
     if (search) {
       recipes = db.prepare(`
         SELECT * FROM recipes
-        WHERE title LIKE ? OR ingredients LIKE ? OR instructions LIKE ?
+        WHERE user_id = ? AND (title LIKE ? OR ingredients LIKE ? OR instructions LIKE ?)
         ORDER BY updated_at DESC
-      `).all(`%${search}%`, `%${search}%`, `%${search}%`);
+      `).all(userId, `%${search}%`, `%${search}%`, `%${search}%`);
     } else if (tag) {
       recipes = db.prepare(`
         SELECT r.* FROM recipes r
         JOIN recipe_tags rt ON r.id = rt.recipe_id
-        WHERE rt.tag = ?
+        WHERE r.user_id = ? AND rt.tag = ?
         ORDER BY r.updated_at DESC
-      `).all(tag);
+      `).all(userId, tag);
     } else {
-      recipes = db.prepare('SELECT * FROM recipes ORDER BY updated_at DESC').all();
+      recipes = db.prepare('SELECT * FROM recipes WHERE user_id = ? ORDER BY updated_at DESC').all(userId);
     }
 
     // Attach tags and notes to each recipe
@@ -47,11 +48,11 @@ router.get('/', (req, res) => {
   }
 });
 
-// GET single recipe
+// GET single recipe (verify ownership)
 router.get('/:id', (req, res) => {
   try {
     const db = getDb();
-    const recipe = db.prepare('SELECT * FROM recipes WHERE id = ?').get(req.params.id);
+    const recipe = db.prepare('SELECT * FROM recipes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
 
     if (!recipe) {
       return res.status(404).json({ error: 'Recipe not found' });
@@ -78,6 +79,7 @@ router.post('/', (req, res) => {
   try {
     const db = getDb();
     const { title, ingredients, instructions, image_url, source_url, tags } = req.body;
+    const userId = req.user.id;
 
     if (!title || !ingredients || !instructions) {
       return res.status(400).json({ error: 'Title, ingredients, and instructions are required' });
@@ -87,9 +89,9 @@ router.post('/', (req, res) => {
     const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO recipes (id, title, ingredients, instructions, image_url, source_url, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, title, JSON.stringify(ingredients), JSON.stringify(instructions), image_url || null, source_url || null, now, now);
+      INSERT INTO recipes (id, user_id, title, ingredients, instructions, image_url, source_url, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, userId, title, JSON.stringify(ingredients), JSON.stringify(instructions), image_url || null, source_url || null, now, now);
 
     // Insert tags
     if (tags && tags.length > 0) {
@@ -99,24 +101,30 @@ router.post('/', (req, res) => {
       }
     }
 
-    res.status(201).json({ id, title, ingredients, instructions, image_url, source_url, tags: tags || [], notes: [], created_at: now, updated_at: now });
+    res.status(201).json({ id, user_id: userId, title, ingredients, instructions, image_url, source_url, tags: tags || [], notes: [], created_at: now, updated_at: now });
   } catch (error) {
     console.error('Error creating recipe:', error);
     res.status(500).json({ error: 'Failed to create recipe' });
   }
 });
 
-// PUT update recipe
+// PUT update recipe (verify ownership)
 router.put('/:id', (req, res) => {
   try {
     const db = getDb();
     const { title, ingredients, instructions, image_url, source_url, tags } = req.body;
     const now = new Date().toISOString();
 
+    // Verify ownership
+    const existing = db.prepare('SELECT id FROM recipes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+
     db.prepare(`
       UPDATE recipes SET title = ?, ingredients = ?, instructions = ?, image_url = ?, source_url = ?, updated_at = ?
-      WHERE id = ?
-    `).run(title, JSON.stringify(ingredients), JSON.stringify(instructions), image_url || null, source_url || null, now, req.params.id);
+      WHERE id = ? AND user_id = ?
+    `).run(title, JSON.stringify(ingredients), JSON.stringify(instructions), image_url || null, source_url || null, now, req.params.id, req.user.id);
 
     // Update tags
     db.prepare('DELETE FROM recipe_tags WHERE recipe_id = ?').run(req.params.id);
@@ -134,11 +142,11 @@ router.put('/:id', (req, res) => {
   }
 });
 
-// DELETE recipe
+// DELETE recipe (verify ownership)
 router.delete('/:id', (req, res) => {
   try {
     const db = getDb();
-    db.prepare('DELETE FROM recipes WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM recipes WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
     res.json({ message: 'Recipe deleted' });
   } catch (error) {
     console.error('Error deleting recipe:', error);
@@ -146,7 +154,7 @@ router.delete('/:id', (req, res) => {
   }
 });
 
-// POST add note to recipe
+// POST add note to recipe (verify ownership)
 router.post('/:id/notes', (req, res) => {
   try {
     const db = getDb();
@@ -154,6 +162,12 @@ router.post('/:id/notes', (req, res) => {
 
     if (!content) {
       return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    // Verify ownership
+    const recipe = db.prepare('SELECT id FROM recipes WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (!recipe) {
+      return res.status(404).json({ error: 'Recipe not found' });
     }
 
     const result = db.prepare('INSERT INTO recipe_notes (recipe_id, content) VALUES (?, ?)').run(req.params.id, content);
@@ -166,10 +180,16 @@ router.post('/:id/notes', (req, res) => {
   }
 });
 
-// DELETE note
+// DELETE note (verify recipe ownership)
 router.delete('/:recipeId/notes/:noteId', (req, res) => {
   try {
     const db = getDb();
+    // Verify ownership
+    const recipe = db.prepare('SELECT id FROM recipes WHERE id = ? AND user_id = ?').get(req.params.recipeId, req.user.id);
+    if (!recipe) {
+      return res.status(404).json({ error: 'Recipe not found' });
+    }
+
     db.prepare('DELETE FROM recipe_notes WHERE id = ? AND recipe_id = ?').run(req.params.noteId, req.params.recipeId);
     res.json({ message: 'Note deleted' });
   } catch (error) {
@@ -178,11 +198,17 @@ router.delete('/:recipeId/notes/:noteId', (req, res) => {
   }
 });
 
-// GET all tags
+// GET all tags (for current user)
 router.get('/meta/tags', (req, res) => {
   try {
     const db = getDb();
-    const tags = db.prepare('SELECT DISTINCT tag, COUNT(*) as count FROM recipe_tags GROUP BY tag ORDER BY count DESC').all();
+    const tags = db.prepare(`
+      SELECT DISTINCT rt.tag, COUNT(*) as count
+      FROM recipe_tags rt
+      JOIN recipes r ON rt.recipe_id = r.id
+      WHERE r.user_id = ?
+      GROUP BY rt.tag ORDER BY count DESC
+    `).all(req.user.id);
     res.json(tags);
   } catch (error) {
     console.error('Error fetching tags:', error);
