@@ -1,11 +1,12 @@
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
-const { getDb } = require('../database');
 const { v4: uuidv4 } = require('uuid');
+const { findUserByGoogleId, createUser, updateUser } = require('../database');
+const { signToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// POST /api/auth/google - verify Google token and return user
+// POST /api/auth/google - verify Google token and return user + JWT
 router.post('/google', async (req, res) => {
   try {
     const { credential } = req.body;
@@ -25,21 +26,18 @@ router.post('/google', async (req, res) => {
     });
     const payload = ticket.getPayload();
 
-    const db = getDb();
-    let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(payload.sub);
+    let user = await findUserByGoogleId(payload.sub);
 
     if (!user) {
       const id = uuidv4();
-      db.prepare(
-        'INSERT INTO users (id, google_id, email, name, picture) VALUES (?, ?, ?, ?, ?)'
-      ).run(id, payload.sub, payload.email, payload.name, payload.picture);
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+      user = await createUser(id, payload.sub, payload.email, payload.name, payload.picture);
     } else {
-      db.prepare(
-        'UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?'
-      ).run(payload.email, payload.name, payload.picture, payload.sub);
-      user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(payload.sub);
+      await updateUser(payload.sub, payload.email, payload.name, payload.picture);
+      user = await findUserByGoogleId(payload.sub);
     }
+
+    // Issue our own long-lived JWT instead of passing back the Google ID token
+    const token = signToken(user.id);
 
     res.json({
       user: {
@@ -48,7 +46,7 @@ router.post('/google', async (req, res) => {
         name: user.name,
         picture: user.picture,
       },
-      token: credential, // Pass back the Google ID token for subsequent requests
+      token,
     });
   } catch (error) {
     console.error('Google auth error:', error);

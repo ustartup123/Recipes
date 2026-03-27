@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiEdit3, FiLink, FiFileText } from 'react-icons/fi';
+import { FiEdit3, FiLink, FiFileText, FiVideo } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import RecipeForm from '../components/RecipeForm';
-import { createRecipe, parseRecipeFromUrl, parseRecipeFromText } from '../api';
+import { createRecipe, parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromVideo } from '../api';
+
+function isYouTubeUrl(url) {
+  return /(?:youtube\.com|youtu\.be)/.test(url);
+}
 
 export default function AddRecipePage() {
   const navigate = useNavigate();
@@ -31,12 +35,18 @@ export default function AddRecipePage() {
     if (!url.trim()) return;
     setParsing(true);
     try {
-      const data = await parseRecipeFromUrl(url);
+      let data;
+      if (isYouTubeUrl(url)) {
+        data = await parseRecipeFromVideo(url);
+        toast.success('המתכון חולץ מהסרטון בהצלחה!');
+      } else {
+        data = await parseRecipeFromUrl(url);
+        toast.success('המתכון יובא בהצלחה!');
+      }
       setParsedRecipe(data);
       setMethod('manual');
-      toast.success('המתכון יובא בהצלחה!');
-    } catch {
-      toast.error('לא הצלחנו לייבא את המתכון מהקישור');
+    } catch (error) {
+      toast.error(error.message || 'לא הצלחנו לייבא את המתכון מהקישור');
     } finally {
       setParsing(false);
     }
@@ -77,6 +87,13 @@ export default function AddRecipePage() {
           <span className="method-label">ייבוא מקישור</span>
         </button>
         <button
+          className={`method-btn ${method === 'video' ? 'active' : ''}`}
+          onClick={() => setMethod('video')}
+        >
+          <span className="method-icon"><FiVideo /></span>
+          <span className="method-label">ייבוא מסרטון</span>
+        </button>
+        <button
           className={`method-btn ${method === 'text' ? 'active' : ''}`}
           onClick={() => setMethod('text')}
         >
@@ -96,6 +113,11 @@ export default function AddRecipePage() {
               placeholder="https://example.com/recipe"
               dir="ltr"
             />
+            {url && isYouTubeUrl(url) && (
+              <small style={{ color: '#666', marginTop: 4, display: 'block' }}>
+                זוהה קישור YouTube - נחלץ מתכון מהכתוביות
+              </small>
+            )}
           </div>
           <button
             className="btn btn-primary"
@@ -106,10 +128,41 @@ export default function AddRecipePage() {
             {parsing ? (
               <>
                 <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                מייבא מתכון...
+                {isYouTubeUrl(url) ? 'מחלץ מתכון מסרטון...' : 'מייבא מתכון...'}
               </>
-            ) : 'ייבא מתכון'}
+            ) : (isYouTubeUrl(url) ? 'חלץ מתכון מסרטון' : 'ייבא מתכון')}
           </button>
+        </div>
+      )}
+
+      {method === 'video' && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="form-group">
+            <label>הדבק קישור לסרטון YouTube</label>
+            <input
+              type="url"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              dir="ltr"
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleParseUrl}
+            disabled={parsing || !url.trim()}
+            style={{ width: '100%', justifyContent: 'center' }}
+          >
+            {parsing ? (
+              <>
+                <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                מחלץ מתכון מסרטון...
+              </>
+            ) : 'חלץ מתכון מסרטון'}
+          </button>
+          <small style={{ color: '#888', marginTop: 8, display: 'block', textAlign: 'center' }}>
+            המערכת תחלץ את המתכון מכתוביות הסרטון באמצעות AI
+          </small>
         </div>
       )}
 

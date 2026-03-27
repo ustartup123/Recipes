@@ -65,8 +65,14 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Initialize database and start server
-initDatabase();
+async function start() {
+  await initDatabase();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+start().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

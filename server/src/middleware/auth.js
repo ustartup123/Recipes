@@ -1,16 +1,9 @@
-const { OAuth2Client } = require('google-auth-library');
-const { getDb } = require('../database');
-const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
+const { findUserById } = require('../database');
 
-function getClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    throw new Error('GOOGLE_CLIENT_ID is not set');
-  }
-  return new OAuth2Client(clientId);
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'recipes-app-jwt-secret-change-in-production';
 
-// Verify Google ID token and attach user to request
+// Verify our own JWT and attach user to request
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -20,30 +13,11 @@ async function authMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1];
 
   try {
-    const client = getClient();
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-
-    // Find or create user
-    const db = getDb();
-    let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(payload.sub);
-
+    const payload = jwt.verify(token, JWT_SECRET);
+    const user = await findUserById(payload.userId);
     if (!user) {
-      const id = uuidv4();
-      db.prepare(
-        'INSERT INTO users (id, google_id, email, name, picture) VALUES (?, ?, ?, ?, ?)'
-      ).run(id, payload.sub, payload.email, payload.name, payload.picture);
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    } else {
-      // Update user info on each login
-      db.prepare(
-        'UPDATE users SET email = ?, name = ?, picture = ? WHERE google_id = ?'
-      ).run(payload.email, payload.name, payload.picture, payload.sub);
+      return res.status(401).json({ error: 'User not found' });
     }
-
     req.user = user;
     next();
   } catch (error) {
@@ -52,4 +26,8 @@ async function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware };
+function signToken(userId) {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
+}
+
+module.exports = { authMiddleware, signToken };

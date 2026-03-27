@@ -1,80 +1,201 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Firestore } = require('@google-cloud/firestore');
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../data/recipes.db');
 let db;
 
 function getDb() {
   if (!db) {
-    const fs = require('fs');
-    const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    db = new Firestore({
+      projectId: process.env.GCP_PROJECT_ID || 'math-quiz-app-2026',
+    });
   }
   return db;
 }
 
-function initDatabase() {
-  const db = getDb();
+// Collections: users, recipes, recipe_tags, recipe_notes
+// Firestore doesn't need table creation, but we expose helpers
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      google_id TEXT UNIQUE NOT NULL,
-      email TEXT NOT NULL,
-      name TEXT,
-      picture TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS recipes (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      ingredients TEXT NOT NULL,
-      instructions TEXT NOT NULL,
-      image_url TEXT,
-      source_url TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS recipe_tags (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      recipe_id TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS recipe_notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      recipe_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
-    CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
-    CREATE INDEX IF NOT EXISTS idx_recipe_tags_recipe_id ON recipe_tags(recipe_id);
-    CREATE INDEX IF NOT EXISTS idx_recipe_tags_tag ON recipe_tags(tag);
-    CREATE INDEX IF NOT EXISTS idx_recipe_notes_recipe_id ON recipe_notes(recipe_id);
-  `);
-
-  // Migration: add user_id column if missing (for existing databases)
+async function initDatabase() {
+  // Just verify connection
+  const firestore = getDb();
   try {
-    db.prepare("SELECT user_id FROM recipes LIMIT 1").get();
-  } catch {
-    console.log('Migrating: adding user_id column to recipes...');
-    db.exec("ALTER TABLE recipes ADD COLUMN user_id TEXT DEFAULT ''");
+    // Test connectivity by reading a non-existent doc
+    await firestore.collection('users').limit(1).get();
+    console.log('Firestore connected successfully');
+  } catch (error) {
+    console.error('Firestore connection error:', error.message);
+    throw error;
   }
-
-  console.log('Database initialized');
 }
 
-module.exports = { getDb, initDatabase };
+// ---- User operations ----
+
+async function findUserByGoogleId(googleId) {
+  const snapshot = await getDb()
+    .collection('users')
+    .where('google_id', '==', googleId)
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
+}
+
+async function findUserById(userId) {
+  const doc = await getDb().collection('users').doc(userId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
+
+async function createUser(id, googleId, email, name, picture) {
+  const data = {
+    google_id: googleId,
+    email,
+    name,
+    picture,
+    created_at: new Date().toISOString(),
+  };
+  await getDb().collection('users').doc(id).set(data);
+  return { id, ...data };
+}
+
+async function updateUser(googleId, email, name, picture) {
+  const snapshot = await getDb()
+    .collection('users')
+    .where('google_id', '==', googleId)
+    .limit(1)
+    .get();
+  if (!snapshot.empty) {
+    await snapshot.docs[0].ref.update({ email, name, picture });
+  }
+}
+
+// ---- Recipe operations ----
+
+async function getAllRecipes(userId) {
+  const snapshot = await getDb()
+    .collection('recipes')
+    .where('user_id', '==', userId)
+    .orderBy('updated_at', 'desc')
+    .get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+async function searchRecipes(userId, search) {
+  // Firestore doesn't support LIKE queries, so fetch all and filter
+  const all = await getAllRecipes(userId);
+  const lower = search.toLowerCase();
+  return all.filter(r => {
+    const titleMatch = (r.title || '').toLowerCase().includes(lower);
+    const ingredientMatch = JSON.stringify(r.ingredients || []).toLowerCase().includes(lower);
+    const instructionMatch = JSON.stringify(r.instructions || []).toLowerCase().includes(lower);
+    return titleMatch || ingredientMatch || instructionMatch;
+  });
+}
+
+async function getRecipesByTag(userId, tag) {
+  const all = await getAllRecipes(userId);
+  return all.filter(r => (r.tags || []).includes(tag));
+}
+
+async function getRecipeById(recipeId, userId) {
+  const doc = await getDb().collection('recipes').doc(recipeId).get();
+  if (!doc.exists) return null;
+  const data = { id: doc.id, ...doc.data() };
+  if (data.user_id !== userId) return null;
+  return data;
+}
+
+async function createRecipe(id, userId, { title, ingredients, instructions, image_url, source_url, tags }) {
+  const now = new Date().toISOString();
+  const data = {
+    user_id: userId,
+    title,
+    ingredients: ingredients || [],
+    instructions: instructions || [],
+    image_url: image_url || null,
+    source_url: source_url || null,
+    tags: tags || [],
+    notes: [],
+    created_at: now,
+    updated_at: now,
+  };
+  await getDb().collection('recipes').doc(id).set(data);
+  return { id, ...data };
+}
+
+async function updateRecipe(recipeId, userId, { title, ingredients, instructions, image_url, source_url, tags }) {
+  const doc = await getDb().collection('recipes').doc(recipeId).get();
+  if (!doc.exists || doc.data().user_id !== userId) return false;
+  const now = new Date().toISOString();
+  await doc.ref.update({
+    title,
+    ingredients: ingredients || [],
+    instructions: instructions || [],
+    image_url: image_url || null,
+    source_url: source_url || null,
+    tags: tags || [],
+    updated_at: now,
+  });
+  return true;
+}
+
+async function deleteRecipe(recipeId, userId) {
+  const doc = await getDb().collection('recipes').doc(recipeId).get();
+  if (!doc.exists || doc.data().user_id !== userId) return false;
+  await doc.ref.delete();
+  return true;
+}
+
+// ---- Notes (stored as sub-array on recipe doc) ----
+
+async function addNote(recipeId, userId, noteId, content) {
+  const doc = await getDb().collection('recipes').doc(recipeId).get();
+  if (!doc.exists || doc.data().user_id !== userId) return null;
+  const note = { id: noteId, content, created_at: new Date().toISOString() };
+  const notes = doc.data().notes || [];
+  notes.unshift(note);
+  await doc.ref.update({ notes });
+  return note;
+}
+
+async function deleteNote(recipeId, userId, noteId) {
+  const doc = await getDb().collection('recipes').doc(recipeId).get();
+  if (!doc.exists || doc.data().user_id !== userId) return false;
+  const notes = (doc.data().notes || []).filter(n => n.id !== noteId);
+  await doc.ref.update({ notes });
+  return true;
+}
+
+// ---- Tags ----
+
+async function getAllTags(userId) {
+  const recipes = await getAllRecipes(userId);
+  const tagCounts = {};
+  for (const recipe of recipes) {
+    for (const tag of (recipe.tags || [])) {
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    }
+  }
+  return Object.entries(tagCounts)
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+module.exports = {
+  getDb,
+  initDatabase,
+  findUserByGoogleId,
+  findUserById,
+  createUser,
+  updateUser,
+  getAllRecipes,
+  searchRecipes,
+  getRecipesByTag,
+  getRecipeById,
+  createRecipe,
+  updateRecipe,
+  deleteRecipe,
+  addNote,
+  deleteNote,
+  getAllTags,
+};

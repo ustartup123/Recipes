@@ -4,13 +4,186 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const router = express.Router();
 
-function getGeminiModel() {
+function getGeminiModel(userId) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not set');
   }
   const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  // Tag all calls with app name and user ID for tracking
+  const modelOptions = {
+    model: 'gemini-2.5-flash',
+    generationConfig: {},
+  };
+  return {
+    model: genAI.getGenerativeModel(modelOptions),
+    // Custom headers for tracking - passed via request metadata
+    metadata: {
+      app: 'recipes-app',
+      userId: userId || 'anonymous',
+    }
+  };
+}
+
+async function callGemini(userId, prompt) {
+  const { model, metadata } = getGeminiModel(userId);
+  // Prefix prompt with tracking metadata as a system-level comment
+  const taggedPrompt = `[app:recipes-app][user:${metadata.userId}]\n\n${prompt}`;
+  const result = await model.generateContent(taggedPrompt);
+  return result.response.text();
+}
+
+// Fetch URL with timeout and retry
+async function fetchUrl(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'identity',
+  };
+
+  try {
+    const response = await fetch(url, { headers, signal: controller.signal, redirect: 'follow' });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.text();
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out after 15 seconds');
+    }
+    throw error;
+  }
+}
+
+// Extract recipe content from HTML with multiple strategies
+function extractRecipeContent(html, url) {
+  const $ = cheerio.load(html);
+
+  // === Strategy 1: JSON-LD Recipe schema (most reliable) ===
+  let recipeSchema = null;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const data = JSON.parse($(el).html());
+      const findRecipe = (obj) => {
+        if (!obj) return null;
+        if (obj['@type'] === 'Recipe') return obj;
+        if (Array.isArray(obj['@type']) && obj['@type'].includes('Recipe')) return obj;
+        if (Array.isArray(obj)) {
+          for (const item of obj) {
+            const found = findRecipe(item);
+            if (found) return found;
+          }
+        }
+        if (obj['@graph']) return findRecipe(obj['@graph']);
+        return null;
+      };
+      const found = findRecipe(data);
+      if (found) recipeSchema = found;
+    } catch {}
+  });
+
+  // === Find the best image ===
+  let imageUrl = null;
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  if (ogImage) {
+    imageUrl = ogImage.startsWith('http') ? ogImage : new URL(ogImage, url).href;
+  }
+  if (recipeSchema?.image) {
+    const img = Array.isArray(recipeSchema.image) ? recipeSchema.image[0] : recipeSchema.image;
+    imageUrl = typeof img === 'string' ? img : img?.url || imageUrl;
+  }
+
+  const contentParts = [];
+
+  if (recipeSchema) {
+    contentParts.push('=== STRUCTURED RECIPE DATA (JSON-LD) ===\n' + JSON.stringify(recipeSchema, null, 2));
+  }
+
+  // === Strategy 2: WPRM (WordPress Recipe Maker) - very common ===
+  const wprmRecipe = $('.wprm-recipe-container, .wprm-recipe');
+  if (wprmRecipe.length) {
+    const wprmText = wprmRecipe.text().replace(/\s+/g, ' ').trim();
+    if (wprmText.length > 100) {
+      contentParts.push('=== WORDPRESS RECIPE MAKER ===\n' + wprmText.substring(0, 8000));
+    }
+  }
+
+  // === Strategy 3: Microdata (filter out comments!) ===
+  const microdataText = [];
+  $('[itemtype*="Recipe"] [itemprop]').each((_, el) => {
+    const prop = $(el).attr('itemprop');
+    const text = $(el).text().trim();
+    if (prop && text && text.length < 500) {
+      microdataText.push(`${prop}: ${text}`);
+    }
+  });
+  // Only use microdata if it's from a Recipe scope (not from comments/articles)
+  if (microdataText.length > 3) {
+    contentParts.push('=== RECIPE MICRODATA ===\n' + microdataText.join('\n'));
+  }
+
+  // === Strategy 4: Clean HTML content extraction ===
+  const $clean = cheerio.load(html);
+  // Remove noise aggressively
+  $clean('script, style, nav, footer, header, aside, iframe, svg, form').remove();
+  $clean('[class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [class*="related"], [class*="recommended"], [class*="footer"], [class*="header"], [class*="navigation"], [class*="breadcrumb"]').remove();
+  $clean('[id*="comment"], [id*="sidebar"], [id*="ad"], [id*="footer"], [id*="header"], [id*="nav"]').remove();
+
+  // Prioritize specific content containers (ordered from most specific to broadest)
+  const contentSelectors = [
+    '.wprm-recipe-container', '.wprm-recipe',
+    '.recipe-content', '.recipe-body', '.recipe',
+    '.entry-content', '.post-content',
+    '[class*="recipe-card"]', '[class*="recipe-detail"]',
+    'article .content', 'article',
+    '.content', 'main',
+    'body'
+  ];
+
+  let mainContent = '';
+  for (const selector of contentSelectors) {
+    const text = $clean(selector).first().text().replace(/\s+/g, ' ').trim();
+    if (text.length > 200) {
+      mainContent = text;
+      break;
+    }
+  }
+
+  // Extract list items from clean content (often contain ingredients/steps)
+  const listItems = [];
+  $clean('.entry-content li, .post-content li, article li, .recipe li, main li').each((_, el) => {
+    const text = $clean(el).text().trim();
+    if (text.length > 3 && text.length < 500) {
+      listItems.push(text);
+    }
+  });
+  if (listItems.length > 0) {
+    contentParts.push('=== LIST ITEMS FROM PAGE ===\n' + listItems.slice(0, 60).join('\n'));
+  }
+
+  // Limit main content but use a generous amount
+  if (mainContent) {
+    contentParts.push('=== PAGE TEXT CONTENT ===\n' + mainContent.substring(0, 15000));
+  }
+
+  const pageTitle = $('title').text().trim() || $('h1').first().text().trim();
+  const metaDescription = $('meta[name="description"]').attr('content') || '';
+
+  return {
+    content: contentParts.join('\n\n').substring(0, 25000),
+    pageTitle,
+    metaDescription,
+    imageUrl,
+    hasStructuredData: !!recipeSchema,
+  };
 }
 
 // POST parse recipe from URL
@@ -21,119 +194,38 @@ router.post('/parse-url', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    // Fetch the webpage with browser-like headers
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8'
-      }
-    });
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    const userId = req.user?.id || 'anonymous';
 
-    // Try to extract JSON-LD recipe schema first (most recipe sites have this)
-    let recipeSchema = null;
-    $('script[type="application/ld+json"]').each((_, el) => {
-      try {
-        const data = JSON.parse($(el).html());
-        const findRecipe = (obj) => {
-          if (!obj) return null;
-          if (obj['@type'] === 'Recipe') return obj;
-          if (Array.isArray(obj)) {
-            for (const item of obj) {
-              const found = findRecipe(item);
-              if (found) return found;
-            }
-          }
-          if (obj['@graph']) return findRecipe(obj['@graph']);
-          return null;
-        };
-        const found = findRecipe(data);
-        if (found) recipeSchema = found;
-      } catch {}
-    });
-
-    // Find the best image
-    let imageUrl = null;
-    const ogImage = $('meta[property="og:image"]').attr('content');
-    if (ogImage) {
-      imageUrl = ogImage.startsWith('http') ? ogImage : new URL(ogImage, url).href;
-    }
-    if (recipeSchema?.image) {
-      const img = Array.isArray(recipeSchema.image) ? recipeSchema.image[0] : recipeSchema.image;
-      imageUrl = typeof img === 'string' ? img : img?.url || imageUrl;
+    // Fetch with timeout
+    let html;
+    try {
+      html = await fetchUrl(url);
+    } catch (fetchError) {
+      return res.status(400).json({
+        error: `Failed to fetch URL: ${fetchError.message}. The site may be blocking automated access.`
+      });
     }
 
-    // Extract content using multiple strategies for best results
-    const contentParts = [];
-
-    // Strategy 1: JSON-LD schema (structured data - best source)
-    if (recipeSchema) {
-      contentParts.push('=== STRUCTURED RECIPE DATA (JSON-LD) ===\n' + JSON.stringify(recipeSchema, null, 2));
+    if (!html || html.length < 100) {
+      return res.status(400).json({ error: 'The URL returned empty or very short content' });
     }
 
-    // Strategy 2: Microdata recipe attributes
-    const microdataText = [];
-    $('[itemtype*="Recipe"], [itemprop]').each((_, el) => {
-      const prop = $(el).attr('itemprop');
-      const text = $(el).text().trim();
-      if (prop && text && text.length < 500) {
-        microdataText.push(`${prop}: ${text}`);
-      }
-    });
-    if (microdataText.length > 0) {
-      contentParts.push('=== MICRODATA ===\n' + microdataText.join('\n'));
+    const { content, pageTitle, metaDescription, imageUrl, hasStructuredData } = extractRecipeContent(html, url);
+
+    if (content.length < 50) {
+      return res.status(400).json({ error: 'Could not extract meaningful content from the URL' });
     }
 
-    // Strategy 3: Extract from common recipe page selectors
-    const recipeSelectors = [
-      '.recipe-content', '.recipe-body', '.recipe',
-      '[class*="recipe"]', '[class*="ingredient"]', '[class*="instruction"]',
-      '[class*="direction"]', '[class*="method"]', '[class*="step"]',
-      'article', '.entry-content', '.post-content', '.content',
-      'main'
-    ];
-    const $clean = cheerio.load(html);
-    $clean('script, style, nav, footer, header, aside, [class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [id*="comment"], [id*="sidebar"], [id*="ad"]').remove();
+    // Adjust prompt based on whether we have structured data
+    const structuredHint = hasStructuredData
+      ? 'The page has structured recipe data (JSON-LD) which is the most reliable source.'
+      : 'This page has NO structured recipe schema. The recipe is embedded in free-form text. Look carefully for ingredients and instructions within the narrative text.';
 
-    let mainContent = '';
-    for (const selector of recipeSelectors) {
-      const text = $clean(selector).text().replace(/\s+/g, ' ').trim();
-      if (text.length > 200) {
-        mainContent = text;
-        break;
-      }
-    }
-    if (!mainContent) {
-      mainContent = $clean('body').text().replace(/\s+/g, ' ').trim();
-    }
-
-    // Also extract list items which often contain ingredients/steps
-    const listItems = [];
-    $clean('li, ol li, ul li').each((_, el) => {
-      const text = $(el).text().trim();
-      if (text.length > 5 && text.length < 500) {
-        listItems.push(text);
-      }
-    });
-    if (listItems.length > 0) {
-      contentParts.push('=== LIST ITEMS FROM PAGE ===\n' + listItems.slice(0, 60).join('\n'));
-    }
-
-    contentParts.push('=== PAGE TEXT CONTENT ===\n' + mainContent.substring(0, 12000));
-
-    // Get the page title
-    const pageTitle = $('title').text().trim() || $('h1').first().text().trim();
-    const metaDescription = $('meta[name="description"]').attr('content') || '';
-
-    const fullContent = contentParts.join('\n\n').substring(0, 20000);
-
-    // Use Gemini to parse the recipe - with a robust prompt
-    const model = getGeminiModel();
-    const prompt = `You are an expert recipe extractor. Below is raw content scraped from a recipe webpage. The content is MESSY and contains lots of irrelevant text (ads, navigation, comments, related articles, etc.).
+    const prompt = `You are an expert recipe extractor. Below is raw content scraped from a recipe webpage. The content may be MESSY and contain irrelevant text (ads, navigation, comments, related articles, etc.).
 
 Your job: IGNORE all the noise and extract ONLY the recipe information.
+
+${structuredHint}
 
 Page title: "${pageTitle}"
 Page description: "${metaDescription}"
@@ -154,17 +246,17 @@ Critical rules:
 - Focus ONLY on the actual recipe - ignore comments, ads, "related recipes", author bio, etc.
 - If there are multiple recipes on the page, extract only the main/primary recipe
 - Keep ingredient amounts in their original measurement units, just translate the unit name to Hebrew
+- If the recipe content is in a blog narrative style, carefully extract the ingredients and steps from the text
 
 === RAW PAGE CONTENT (extract the recipe from this mess) ===
-${fullContent}`;
+${content}`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const text = await callGemini(userId, prompt);
 
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return res.status(500).json({ error: 'Failed to parse recipe from URL' });
+      return res.status(500).json({ error: 'Failed to parse recipe from URL - AI could not extract structured data' });
     }
 
     const recipe = JSON.parse(jsonMatch[0]);
@@ -186,7 +278,8 @@ router.post('/parse-text', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    const model = getGeminiModel();
+    const userId = req.user?.id || 'anonymous';
+
     const prompt = `Parse the following free text into a structured recipe. Return ONLY valid JSON with this structure:
 {
   "title": "recipe title in Hebrew",
@@ -204,8 +297,7 @@ Important:
 Text:
 ${text}`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const responseText = await callGemini(userId, prompt);
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -220,6 +312,116 @@ ${text}`;
   }
 });
 
+// POST parse recipe from YouTube video
+router.post('/parse-video', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'Video URL is required' });
+    }
+
+    const userId = req.user?.id || 'anonymous';
+
+    // Extract YouTube video ID
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
+      return res.status(400).json({ error: 'Invalid YouTube URL' });
+    }
+
+    // Get video metadata via oEmbed
+    let videoTitle = '';
+    try {
+      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+      const oembedRes = await fetch(oembedUrl);
+      if (oembedRes.ok) {
+        const oembedData = await oembedRes.json();
+        videoTitle = oembedData.title || '';
+      }
+    } catch {}
+
+    // Get video thumbnail
+    const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+
+    // Get transcript/captions
+    let transcript = '';
+    try {
+      const { YoutubeTranscript } = require('youtube-transcript');
+      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
+      transcript = transcriptItems.map(item => item.text).join(' ');
+    } catch (transcriptError) {
+      console.error('Transcript error:', transcriptError.message);
+
+      // Fallback: try to get video description from the page
+      try {
+        const html = await fetchUrl(`https://www.youtube.com/watch?v=${videoId}`);
+        const $ = cheerio.load(html);
+        const description = $('meta[name="description"]').attr('content') || '';
+        if (description.length > 50) {
+          transcript = `Video title: ${videoTitle}\nVideo description: ${description}`;
+        }
+      } catch {}
+    }
+
+    if (!transcript || transcript.length < 30) {
+      return res.status(400).json({
+        error: 'Could not extract captions/transcript from this video. The video may not have captions available.'
+      });
+    }
+
+    const prompt = `You are an expert recipe extractor. Below is a transcript from a YouTube cooking video.
+Extract the recipe from this transcript.
+
+Video title: "${videoTitle}"
+
+Return ONLY valid JSON with this exact structure:
+{
+  "title": "recipe title in Hebrew",
+  "ingredients": [{"name": "ingredient name in Hebrew", "amount": "amount with unit"}],
+  "instructions": ["step 1 with ingredient amounts included in the text", "step 2..."],
+  "tags": ["tag1", "tag2"]
+}
+
+Critical rules:
+- Translate EVERYTHING to Hebrew (title, ingredients, instructions, tags)
+- Each instruction step MUST include the specific amounts of ingredients mentioned in that step
+- Tags should be relevant Hebrew food categories
+- Extract cooking times, temperatures, and specific techniques mentioned
+- Ignore any sponsor mentions, intros, outros, or non-recipe chat
+- If amounts are mentioned verbally (like "a cup of flour"), convert to standard measurements
+
+=== VIDEO TRANSCRIPT ===
+${transcript.substring(0, 15000)}`;
+
+    const text = await callGemini(userId, prompt);
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.status(500).json({ error: 'Failed to extract recipe from video transcript' });
+    }
+
+    const recipe = JSON.parse(jsonMatch[0]);
+    recipe.image_url = thumbnailUrl;
+    recipe.source_url = url;
+
+    res.json(recipe);
+  } catch (error) {
+    console.error('Error parsing video:', error);
+    res.status(500).json({ error: 'Failed to parse recipe from video: ' + error.message });
+  }
+});
+
+function extractYouTubeId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 // POST generate image for recipe
 router.post('/generate-image', async (req, res) => {
   try {
@@ -228,7 +430,7 @@ router.post('/generate-image', async (req, res) => {
       return res.status(400).json({ error: 'Recipe title is required' });
     }
 
-    const model = getGeminiModel();
+    const userId = req.user?.id || 'anonymous';
     const ingredientsList = ingredients
       ? ingredients.map(i => `${i.name} ${i.amount}`).join(', ')
       : '';
@@ -236,11 +438,8 @@ router.post('/generate-image', async (req, res) => {
     const prompt = `Generate a detailed, appetizing food photography description for the dish: "${title}" with ingredients: ${ingredientsList}.
     Describe what the final plated dish would look like in one paragraph. Focus on colors, textures, garnishes, and presentation.`;
 
-    const result = await model.generateContent(prompt);
-    const description = result.response.text();
+    const description = await callGemini(userId, prompt);
 
-    // For now, return a placeholder - Gemini image generation requires Imagen API
-    // We'll use a food placeholder based on the title
     const encodedTitle = encodeURIComponent(title);
     const placeholderUrl = `https://via.placeholder.com/800x600/f5e6d3/8b4513?text=${encodedTitle}`;
 

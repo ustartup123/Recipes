@@ -102,6 +102,18 @@ export async function parseRecipeFromText(text) {
   return res.json();
 }
 
+export async function parseRecipeFromVideo(url) {
+  const res = await authFetch(`${API_BASE}/ai/parse-video`, {
+    method: 'POST',
+    body: JSON.stringify({ url })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to parse video');
+  }
+  return res.json();
+}
+
 export async function generateImage(title, ingredients) {
   const res = await authFetch(`${API_BASE}/ai/generate-image`, {
     method: 'POST',
