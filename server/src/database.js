@@ -75,9 +75,11 @@ async function getAllRecipes(userId) {
   const snapshot = await getDb()
     .collection('recipes')
     .where('user_id', '==', userId)
-    .orderBy('updated_at', 'desc')
     .get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const recipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  // Sort client-side to avoid requiring a composite index
+  recipes.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  return recipes;
 }
 
 async function searchRecipes(userId, search) {
