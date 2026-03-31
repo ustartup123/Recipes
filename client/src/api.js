@@ -101,7 +101,10 @@ export async function parseRecipeFromText(text) {
     method: 'POST',
     body: JSON.stringify({ text })
   });
-  if (!res.ok) throw new Error('Failed to parse text');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to parse text');
+  }
   return res.json();
 }
 
