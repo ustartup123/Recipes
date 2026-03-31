@@ -34,7 +34,17 @@ async function callGemini(userId, prompt) {
 }
 
 // Fetch URL with timeout and retry
-async function fetchUrl(url) {
+async function fetchUrl(rawUrl) {
+  // Normalize URL so that raw Hebrew characters (copied from browser address bar)
+  // are percent-encoded before being passed to fetch(). Already-encoded sequences
+  // like %D7%A7 are left untouched by the WHATWG URL parser.
+  let url;
+  try {
+    url = new URL(rawUrl).href;
+  } catch {
+    throw new Error(`Invalid URL: ${rawUrl}`);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 

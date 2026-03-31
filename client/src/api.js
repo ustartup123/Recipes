@@ -89,7 +89,10 @@ export async function parseRecipeFromUrl(url) {
     method: 'POST',
     body: JSON.stringify({ url })
   });
-  if (!res.ok) throw new Error('Failed to parse URL');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to parse URL');
+  }
   return res.json();
 }
 
