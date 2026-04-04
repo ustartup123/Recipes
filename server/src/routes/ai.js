@@ -206,6 +206,17 @@ router.post('/parse-url', async (req, res) => {
 
     const userId = req.user?.id || 'anonymous';
 
+    // Detect YouTube URLs and route to the 3-tier YouTube pipeline
+    const videoId = extractYouTubeId(url);
+    if (videoId) {
+      try {
+        const recipe = await extractYouTubeRecipe(videoId, url, userId);
+        return res.json(recipe);
+      } catch (ytError) {
+        return res.status(400).json({ error: ytError.message });
+      }
+    }
+
     // Fetch with timeout
     let html;
     try {
@@ -322,66 +333,46 @@ ${text}`;
   }
 });
 
-// POST parse recipe from YouTube video
-router.post('/parse-video', async (req, res) => {
+// 3-tier YouTube recipe extraction:
+//   Tier 1 – video description (fast, free)
+//   Tier 2 – captions/transcript via youtube-transcript
+//   Tier 3 – Gemini video analysis (multimodal, used when text is insufficient)
+async function extractYouTubeRecipe(videoId, videoUrl, userId) {
+  const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // --- Tier 1: description from the YouTube page ---
+  let videoTitle = '';
+  let description = '';
   try {
-    const { url } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'Video URL is required' });
-    }
+    const html = await fetchUrl(watchUrl);
+    const $ = cheerio.load(html);
+    videoTitle = ($('meta[property="og:title"]').attr('content') || $('title').text().replace(' - YouTube', '')).trim();
+    description = $('meta[name="description"]').attr('content') || $('meta[property="og:description"]').attr('content') || '';
+    console.log(`[YouTube] Tier 1: title="${videoTitle}", description length=${description.length}`);
+  } catch (e) {
+    console.error('[YouTube] Tier 1 failed:', e.message);
+  }
 
-    const userId = req.user?.id || 'anonymous';
+  // --- Tier 2: captions/transcript ---
+  let transcript = '';
+  try {
+    const { YoutubeTranscript } = require('youtube-transcript');
+    const items = await YoutubeTranscript.fetchTranscript(videoId);
+    transcript = items.map(i => i.text).join(' ');
+    console.log(`[YouTube] Tier 2: transcript length=${transcript.length}`);
+  } catch (e) {
+    console.error('[YouTube] Tier 2 (captions) failed:', e.message);
+  }
 
-    // Extract YouTube video ID
-    const videoId = extractYouTubeId(url);
-    if (!videoId) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
-    }
+  // Build text context from tiers 1 + 2
+  const parts = [];
+  if (videoTitle) parts.push(`Video title: ${videoTitle}`);
+  if (description) parts.push(`Video description: ${description}`);
+  if (transcript) parts.push(`Video transcript:\n${transcript.substring(0, 12000)}`);
+  const textContext = parts.join('\n\n');
 
-    // Get video metadata via oEmbed
-    let videoTitle = '';
-    try {
-      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-      const oembedRes = await fetch(oembedUrl);
-      if (oembedRes.ok) {
-        const oembedData = await oembedRes.json();
-        videoTitle = oembedData.title || '';
-      }
-    } catch {}
-
-    // Get video thumbnail
-    const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-
-    // Get transcript/captions
-    let transcript = '';
-    try {
-      const { YoutubeTranscript } = require('youtube-transcript');
-      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
-      transcript = transcriptItems.map(item => item.text).join(' ');
-    } catch (transcriptError) {
-      console.error('Transcript error:', transcriptError.message);
-
-      // Fallback: try to get video description from the page
-      try {
-        const html = await fetchUrl(`https://www.youtube.com/watch?v=${videoId}`);
-        const $ = cheerio.load(html);
-        const description = $('meta[name="description"]').attr('content') || '';
-        if (description.length > 50) {
-          transcript = `Video title: ${videoTitle}\nVideo description: ${description}`;
-        }
-      } catch {}
-    }
-
-    if (!transcript || transcript.length < 30) {
-      return res.status(400).json({
-        error: 'Could not extract captions/transcript from this video. The video may not have captions available.'
-      });
-    }
-
-    const prompt = `You are an expert recipe extractor. Below is a transcript from a YouTube cooking video.
-Extract the recipe from this transcript.
-
-Video title: "${videoTitle}"
+  const recipeJsonPrompt = (context) => `You are an expert recipe extractor. Extract the recipe from this YouTube cooking video content.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -394,29 +385,79 @@ Return ONLY valid JSON with this exact structure:
 Critical rules:
 - Translate EVERYTHING to Hebrew (title, ingredients, instructions, tags)
 - Each instruction step MUST include the specific amounts of ingredients mentioned in that step
-- Tags should be relevant Hebrew food categories
+- Tags should be relevant Hebrew food categories (e.g., "עוגות", "בשרי", "טבעוני", "קינוחים")
 - Extract cooking times, temperatures, and specific techniques mentioned
-- Ignore any sponsor mentions, intros, outros, or non-recipe chat
-- If amounts are mentioned verbally (like "a cup of flour"), convert to standard measurements
+- Ignore sponsor mentions, intros, outros, or non-recipe chat
+- Convert verbal measurements (e.g., "a cup of flour") to standard units
 
-=== VIDEO TRANSCRIPT ===
-${transcript.substring(0, 15000)}`;
+=== CONTENT ===
+${context}`;
 
-    const text = await callGemini(userId, prompt);
+  // Use text tiers if we have enough content
+  if (textContext.length > 100) {
+    try {
+      const responseText = await callGemini(userId, recipeJsonPrompt(textContext));
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const recipe = JSON.parse(jsonMatch[0]);
+        recipe.image_url = thumbnailUrl;
+        recipe.source_url = videoUrl;
+        return recipe;
+      }
+    } catch (e) {
+      console.error('[YouTube] Text-based extraction failed:', e.message);
+    }
+  }
 
+  // --- Tier 3: Gemini multimodal video analysis ---
+  console.log('[YouTube] Tier 3: falling back to Gemini video analysis');
+  try {
+    const { model } = getGeminiModel(userId);
+    const videoPrompt = recipeJsonPrompt(videoTitle ? `Video title: ${videoTitle}` : 'YouTube cooking video');
+    const result = await model.generateContent([
+      {
+        fileData: {
+          mimeType: 'video/mp4',
+          fileUri: watchUrl,
+        },
+      },
+      { text: videoPrompt },
+    ]);
+    const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return res.status(500).json({ error: 'Failed to extract recipe from video transcript' });
+      throw new Error('Gemini video analysis returned no structured JSON');
     }
-
     const recipe = JSON.parse(jsonMatch[0]);
     recipe.image_url = thumbnailUrl;
-    recipe.source_url = url;
+    recipe.source_url = videoUrl;
+    return recipe;
+  } catch (e) {
+    console.error('[YouTube] Tier 3 (Gemini video) failed:', e.message);
+    throw new Error('Could not extract recipe from this YouTube video. The video may lack captions and Gemini video analysis also failed.');
+  }
+}
 
+// POST parse recipe from YouTube video
+router.post('/parse-video', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'Video URL is required' });
+    }
+
+    const userId = req.user?.id || 'anonymous';
+
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
+      return res.status(400).json({ error: 'Invalid YouTube URL' });
+    }
+
+    const recipe = await extractYouTubeRecipe(videoId, url, userId);
     res.json(recipe);
   } catch (error) {
     console.error('Error parsing video:', error);
-    res.status(500).json({ error: 'Failed to parse recipe from video: ' + error.message });
+    res.status(400).json({ error: error.message });
   }
 });
 
