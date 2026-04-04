@@ -1,6 +1,7 @@
 const express = require('express');
 const cheerio = require('cheerio');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { extractRecipeFromYouTube, extractYouTubeId } = require('../youtube-recipe');
 
 const router = express.Router();
 
@@ -322,7 +323,7 @@ ${text}`;
   }
 });
 
-// POST parse recipe from YouTube video
+// POST parse recipe from YouTube video — uses 3-tier extraction system
 router.post('/parse-video', async (req, res) => {
   try {
     const { url } = req.body;
@@ -332,13 +333,12 @@ router.post('/parse-video', async (req, res) => {
 
     const userId = req.user?.id || 'anonymous';
 
-    // Extract YouTube video ID
     const videoId = extractYouTubeId(url);
     if (!videoId) {
       return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
-    // Get video metadata via oEmbed
+    // Get video title via oEmbed (free, no API key needed)
     let videoTitle = '';
     try {
       const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
@@ -349,88 +349,26 @@ router.post('/parse-video', async (req, res) => {
       }
     } catch {}
 
-    // Get video thumbnail
     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
 
-    // Get transcript/captions
-    let transcript = '';
-    try {
-      const { YoutubeTranscript } = require('youtube-transcript');
-      const transcriptItems = await YoutubeTranscript.fetchTranscript(videoId);
-      transcript = transcriptItems.map(item => item.text).join(' ');
-    } catch (transcriptError) {
-      console.error('Transcript error:', transcriptError.message);
+    // 3-tier extraction: description → captions → Gemini video analysis
+    const { recipe, tier } = await extractRecipeFromYouTube(
+      videoId,
+      videoTitle,
+      callGemini,
+      userId
+    );
 
-      // Fallback: try to get video description from the page
-      try {
-        const html = await fetchUrl(`https://www.youtube.com/watch?v=${videoId}`);
-        const $ = cheerio.load(html);
-        const description = $('meta[name="description"]').attr('content') || '';
-        if (description.length > 50) {
-          transcript = `Video title: ${videoTitle}\nVideo description: ${description}`;
-        }
-      } catch {}
-    }
-
-    if (!transcript || transcript.length < 30) {
-      return res.status(400).json({
-        error: 'Could not extract captions/transcript from this video. The video may not have captions available.'
-      });
-    }
-
-    const prompt = `You are an expert recipe extractor. Below is a transcript from a YouTube cooking video.
-Extract the recipe from this transcript.
-
-Video title: "${videoTitle}"
-
-Return ONLY valid JSON with this exact structure:
-{
-  "title": "recipe title in Hebrew",
-  "ingredients": [{"name": "ingredient name in Hebrew", "amount": "amount with unit"}],
-  "instructions": ["step 1 with ingredient amounts included in the text", "step 2..."],
-  "tags": ["tag1", "tag2"]
-}
-
-Critical rules:
-- Translate EVERYTHING to Hebrew (title, ingredients, instructions, tags)
-- Each instruction step MUST include the specific amounts of ingredients mentioned in that step
-- Tags should be relevant Hebrew food categories
-- Extract cooking times, temperatures, and specific techniques mentioned
-- Ignore any sponsor mentions, intros, outros, or non-recipe chat
-- If amounts are mentioned verbally (like "a cup of flour"), convert to standard measurements
-
-=== VIDEO TRANSCRIPT ===
-${transcript.substring(0, 15000)}`;
-
-    const text = await callGemini(userId, prompt);
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return res.status(500).json({ error: 'Failed to extract recipe from video transcript' });
-    }
-
-    const recipe = JSON.parse(jsonMatch[0]);
     recipe.image_url = thumbnailUrl;
     recipe.source_url = url;
 
+    console.log(`[parse-video] Recipe extracted via Tier ${tier}`);
     res.json(recipe);
   } catch (error) {
     console.error('Error parsing video:', error);
     res.status(500).json({ error: 'Failed to parse recipe from video: ' + error.message });
   }
 });
-
-function extractYouTubeId(url) {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
 
 // POST generate image for recipe
 router.post('/generate-image', async (req, res) => {
