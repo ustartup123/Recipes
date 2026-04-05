@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiLogOut } from 'react-icons/fi';
+import { FiPlus, FiLogOut, FiInfo } from 'react-icons/fi';
 import { GiCookingPot } from 'react-icons/gi';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout({ children }) {
   const { user, authEnabled, logout } = useAuth();
+  const [showVersion, setShowVersion] = useState(false);
 
   return (
     <div className="layout">
@@ -29,12 +31,25 @@ export default function Layout({ children }) {
                 </button>
               </div>
             )}
+            <button onClick={() => setShowVersion(true)} className="btn-icon btn-info" title="מידע">
+              <FiInfo />
+            </button>
           </div>
         </div>
       </nav>
       <main className="main-content">
         {children}
       </main>
+      {showVersion && (
+        <div className="version-overlay" onClick={() => setShowVersion(false)}>
+          <div className="version-modal" onClick={e => e.stopPropagation()}>
+            <GiCookingPot className="version-modal-icon" />
+            <h3>המתכונים שלי</h3>
+            <p className="version-number">גרסה {__APP_VERSION__}</p>
+            <button className="btn btn-secondary" onClick={() => setShowVersion(false)}>סגור</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
