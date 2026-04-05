@@ -6,7 +6,7 @@ import RecipeForm from '../components/RecipeForm';
 import { createRecipe, parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromVideo } from '../api';
 
 function isYouTubeUrl(url) {
-  return /(?:youtube\.com|youtu\.be)/.test(url);
+  return /(?:youtube\.com\/(?:watch\?|embed\/|v\/|shorts\/)|youtu\.be\/)/.test(url);
 }
 
 export default function AddRecipePage() {

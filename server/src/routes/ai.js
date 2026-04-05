@@ -335,7 +335,7 @@ router.post('/parse-video', async (req, res) => {
 
     const videoId = extractYouTubeId(url);
     if (!videoId) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
+      return res.status(400).json({ error: 'כתובת YouTube לא תקינה – יש להדביק קישור לסרטון ספציפי, לא לדף חיפוש או ערוץ' });
     }
 
     // Get video title via oEmbed (free, no API key needed)

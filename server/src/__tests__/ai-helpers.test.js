@@ -52,6 +52,18 @@ describe('YouTube ID Extraction', () => {
   test('returns null for empty string', () => {
     expect(extractYouTubeId('')).toBeNull();
   });
+
+  test('returns null for YouTube search results URL', () => {
+    expect(extractYouTubeId('https://www.youtube.com/results?search_query=%D7%97%D7%9F+%D7%91%D7%9E%D7%98%D7%91%D7%97')).toBeNull();
+  });
+
+  test('returns null for YouTube channel URL', () => {
+    expect(extractYouTubeId('https://www.youtube.com/@someChannel')).toBeNull();
+  });
+
+  test('returns null for YouTube playlist URL', () => {
+    expect(extractYouTubeId('https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf')).toBeNull();
+  });
 });
 
 describe('Recipe Content Extraction from HTML', () => {
