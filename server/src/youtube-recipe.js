@@ -17,7 +17,7 @@
  *   Output: ~500 tokens (structured JSON)
  *   Est.    ~$0.00019–$0.00041 per request  ← low cost
  *
- * Tier 3 — Gemini Multimodal Video Analysis (gemini-2.0-flash)
+ * Tier 3 — Gemini Multimodal Video Analysis (gemini-2.5-flash)
  *   Video tokens: ~263 tokens/second of video content
  *     5-min  video ≈  79,000 video tokens  → ~$0.006
  *     10-min video ≈ 158,000 video tokens  → ~$0.012
@@ -219,8 +219,8 @@ async function tier3VideoAnalysis(videoId, videoTitle, userId) {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  // gemini-2.0-flash supports YouTube URL input for multimodal video analysis
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  // gemini-2.5-flash supports YouTube URL input for multimodal video analysis
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
   console.log(
