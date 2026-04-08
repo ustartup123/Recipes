@@ -184,6 +184,42 @@ describe('Recipe Content Extraction from HTML', () => {
     expect(text).not.toContain('Navigation');
     expect(text).not.toContain('Footer');
   });
+
+  test('preserves article content with internal header elements (Wix/Biz sites)', () => {
+    // Regression test for BUG-1: Hebrew blog post from baldbaker.co.il
+    // Wix sites have <header class="SomeClassName"> elements inside <article>
+    // The old removal pattern [class*="header"] was matching these and breaking content extraction
+    const html = `
+      <html><body>
+        <article class="tgMH9T">
+          <header class="PhCafd">
+            <h1>Recipe Title</h1>
+            <div>Date and author info</div>
+          </header>
+          <section class="content">
+            <p>Cup of flour</p>
+            <p>2 eggs</p>
+            <p>Mix ingredients and bake for 30 minutes</p>
+          </section>
+        </article>
+      </body></html>
+    `;
+    const $ = cheerio.load(html);
+    // Apply the FIXED removal patterns
+    $('script, style, nav, aside, iframe, svg, form').remove();
+    // Only remove page-level header/footer, not content headers
+    $('body > footer, body > header').remove();
+    // FIXED: only remove specific header patterns, not all elements with "header" in class
+    $('[class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [class*="related"], [class*="recommended"], [class*="navigation"], [class*="breadcrumb"]').remove();
+    // For footer/header removal, only target page-level elements, not content headers
+    $('[class*="site-footer"], [class*="page-footer"], [class*="page-header"], [class*="site-header"], [class*="main-header"], [class*="post-footer"]').remove();
+
+    const text = $('article').text().replace(/\s+/g, ' ').trim();
+    expect($('article').length).toBe(1); // Article should still exist
+    expect(text).toContain('Recipe Title');
+    expect(text).toContain('Cup of flour');
+    expect(text).toContain('Mix ingredients');
+  });
 });
 
 describe('JWT Auth', () => {

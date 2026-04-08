@@ -143,9 +143,16 @@ function extractRecipeContent(html, url) {
 
   // === Strategy 4: Clean HTML content extraction ===
   const $clean = cheerio.load(html);
-  // Remove noise aggressively
-  $clean('script, style, nav, footer, header, aside, iframe, svg, form').remove();
-  $clean('[class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [class*="related"], [class*="recommended"], [class*="footer"], [class*="header"], [class*="navigation"], [class*="breadcrumb"]').remove();
+  // Remove noise aggressively, but be careful with <header> and <footer> tags
+  // since they can be legitimate content elements in Wix and other modern sites
+  $clean('script, style, nav, aside, iframe, svg, form').remove();
+  // Remove page-level <footer> and <header> tags only if they're direct children of body
+  $clean('body > footer, body > header').remove();
+  // Remove elements with classes containing these patterns - avoid "header" and "footer"
+  // which can match legitimate content headers (e.g., post headers, article headers)
+  $clean('[class*="comment"], [class*="sidebar"], [class*="widget"], [class*="ad-"], [class*="advertisement"], [class*="social"], [class*="share"], [class*="newsletter"], [class*="popup"], [class*="modal"], [class*="cookie"], [class*="related"], [class*="recommended"], [class*="navigation"], [class*="breadcrumb"]').remove();
+  // For footer/header removal via classes, be specific: only remove elements explicitly designed as page-level
+  $clean('[class*="site-footer"], [class*="page-footer"], [class*="page-header"], [class*="site-header"], [class*="main-header"], [class*="post-footer"]').remove();
   $clean('[id*="comment"], [id*="sidebar"], [id*="ad"], [id*="footer"], [id*="header"], [id*="nav"]').remove();
 
   // Prioritize specific content containers (ordered from most specific to broadest)
