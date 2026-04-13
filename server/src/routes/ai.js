@@ -26,12 +26,71 @@ function getGeminiModel(userId) {
   };
 }
 
+// Retry config for transient Gemini errors (503, 429, network)
+const GEMINI_MAX_RETRIES = 3;
+const GEMINI_BASE_DELAY_MS = 1000; // 1s, 2s, 4s exponential backoff
+
+function isRetryableError(error) {
+  const msg = error.message || '';
+  return (
+    msg.includes('503') ||
+    msg.includes('429') ||
+    msg.includes('Service Unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('high demand') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ETIMEDOUT')
+  );
+}
+
+function classifyGeminiError(error) {
+  const msg = error.message || '';
+  if (msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('high demand') || msg.includes('overloaded')) {
+    return { status: 503, userMessage: 'שירות ה-AI עמוס כרגע. נסו שוב בעוד דקה.' };
+  }
+  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+    return { status: 429, userMessage: 'חריגה ממגבלת בקשות. נסו שוב בעוד דקה.' };
+  }
+  if (msg.includes('400') || msg.includes('INVALID_ARGUMENT')) {
+    return { status: 400, userMessage: 'בעיה בעיבוד התוכן. נסו שוב או השתמשו בשיטת ייבוא אחרת.' };
+  }
+  if (msg.includes('API key') || msg.includes('401') || msg.includes('403')) {
+    return { status: 500, userMessage: 'בעיית הגדרות שרת. פנו למנהל המערכת.' };
+  }
+  return { status: 500, userMessage: 'שגיאה בעיבוד המתכון. נסו שוב.' };
+}
+
 async function callGemini(userId, prompt) {
   const { model, metadata } = getGeminiModel(userId);
-  // Prefix prompt with tracking metadata as a system-level comment
   const taggedPrompt = `[app:recipes-app][user:${metadata.userId}]\n\n${prompt}`;
-  const result = await model.generateContent(taggedPrompt);
-  return result.response.text();
+
+  let lastError;
+  for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent(taggedPrompt);
+      return result.response.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt < GEMINI_MAX_RETRIES && isRetryableError(error)) {
+        const delay = GEMINI_BASE_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[Gemini] Attempt ${attempt + 1} failed (${error.message}), retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        break;
+      }
+    }
+  }
+
+  // All retries exhausted — throw a classified error
+  const { status, userMessage } = classifyGeminiError(lastError);
+  const classifiedError = new Error(userMessage);
+  classifiedError.status = status;
+  classifiedError.originalMessage = lastError.message;
+  throw classifiedError;
 }
 
 // Fetch URL with timeout and retry
@@ -283,8 +342,10 @@ ${content}`;
 
     res.json(recipe);
   } catch (error) {
-    console.error('Error parsing URL:', error);
-    res.status(500).json({ error: 'Failed to parse recipe from URL: ' + error.message });
+    console.error('Error parsing URL:', error.originalMessage || error.message);
+    const status = error.status || 500;
+    const message = error.status ? error.message : 'שגיאה בייבוא המתכון. נסו שוב.';
+    res.status(status).json({ error: message });
   }
 });
 
@@ -325,8 +386,10 @@ ${text}`;
     const recipe = JSON.parse(jsonMatch[0]);
     res.json(recipe);
   } catch (error) {
-    console.error('Error parsing text:', error);
-    res.status(500).json({ error: 'Failed to parse recipe from text: ' + error.message });
+    console.error('Error parsing text:', error.originalMessage || error.message);
+    const status = error.status || 500;
+    const message = error.status ? error.message : 'שגיאה בעיבוד הטקסט. נסו שוב.';
+    res.status(status).json({ error: message });
   }
 });
 
@@ -372,8 +435,10 @@ router.post('/parse-video', async (req, res) => {
     console.log(`[parse-video] Recipe extracted via Tier ${tier}`);
     res.json(recipe);
   } catch (error) {
-    console.error('Error parsing video:', error);
-    res.status(500).json({ error: 'Failed to parse recipe from video: ' + error.message });
+    console.error('Error parsing video:', error.originalMessage || error.message);
+    const status = error.status || 500;
+    const message = error.status ? error.message : 'שגיאה בחילוץ מתכון מהסרטון. נסו שוב.';
+    res.status(status).json({ error: message });
   }
 });
 
@@ -403,9 +468,16 @@ router.post('/generate-image', async (req, res) => {
       description
     });
   } catch (error) {
-    console.error('Error generating image:', error);
-    res.status(500).json({ error: 'Failed to generate image: ' + error.message });
+    console.error('Error generating image:', error.originalMessage || error.message);
+    const status = error.status || 500;
+    const message = error.status ? error.message : 'שגיאה ביצירת תמונה. נסו שוב.';
+    res.status(status).json({ error: message });
   }
 });
 
 module.exports = router;
+
+// Export helpers for testing and reuse
+module.exports.isRetryableError = isRetryableError;
+module.exports.classifyGeminiError = classifyGeminiError;
+module.exports.GEMINI_MAX_RETRIES = GEMINI_MAX_RETRIES;

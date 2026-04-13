@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiEdit3, FiLink, FiFileText, FiVideo } from 'react-icons/fi';
+import { FiEdit3, FiLink, FiFileText } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import RecipeForm from '../components/RecipeForm';
 import { createRecipe, parseRecipeFromUrl, parseRecipeFromText, parseRecipeFromVideo } from '../api';
@@ -87,13 +87,6 @@ export default function AddRecipePage() {
           <span className="method-label">ייבוא מקישור</span>
         </button>
         <button
-          className={`method-btn ${method === 'video' ? 'active' : ''}`}
-          onClick={() => setMethod('video')}
-        >
-          <span className="method-icon"><FiVideo /></span>
-          <span className="method-label">ייבוא מסרטון</span>
-        </button>
-        <button
           className={`method-btn ${method === 'text' ? 'active' : ''}`}
           onClick={() => setMethod('text')}
         >
@@ -105,17 +98,17 @@ export default function AddRecipePage() {
       {method === 'url' && (
         <div style={{ marginBottom: 24 }}>
           <div className="form-group">
-            <label>הדבק קישור למתכון</label>
+            <label>הדבק קישור למתכון או לסרטון YouTube</label>
             <input
               type="url"
               value={url}
               onChange={e => setUrl(e.target.value)}
-              placeholder="https://example.com/recipe"
+              placeholder="https://example.com/recipe או קישור YouTube"
               dir="ltr"
             />
             {url && isYouTubeUrl(url) && (
               <small style={{ color: '#666', marginTop: 4, display: 'block' }}>
-                זוהה קישור YouTube - נחלץ מתכון מהכתוביות
+                זוהה קישור YouTube - נחלץ מתכון מהכתוביות באמצעות AI
               </small>
             )}
           </div>
@@ -132,37 +125,6 @@ export default function AddRecipePage() {
               </>
             ) : (isYouTubeUrl(url) ? 'חלץ מתכון מסרטון' : 'ייבא מתכון')}
           </button>
-        </div>
-      )}
-
-      {method === 'video' && (
-        <div style={{ marginBottom: 24 }}>
-          <div className="form-group">
-            <label>הדבק קישור לסרטון YouTube</label>
-            <input
-              type="url"
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              dir="ltr"
-            />
-          </div>
-          <button
-            className="btn btn-primary"
-            onClick={handleParseUrl}
-            disabled={parsing || !url.trim()}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {parsing ? (
-              <>
-                <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                מחלץ מתכון מסרטון...
-              </>
-            ) : 'חלץ מתכון מסרטון'}
-          </button>
-          <small style={{ color: '#888', marginTop: 8, display: 'block', textAlign: 'center' }}>
-            המערכת תחלץ את המתכון מכתוביות הסרטון באמצעות AI
-          </small>
         </div>
       )}
 

@@ -222,6 +222,67 @@ describe('Recipe Content Extraction from HTML', () => {
   });
 });
 
+describe('Gemini Error Handling', () => {
+  const { isRetryableError, classifyGeminiError } = require('../routes/ai');
+
+  describe('isRetryableError', () => {
+    test('retries on 503 Service Unavailable', () => {
+      expect(isRetryableError(new Error('[GoogleGenerativeAI Error]: Error fetching from https://...: [503 Service Unavailable]'))).toBe(true);
+    });
+
+    test('retries on 429 rate limit', () => {
+      expect(isRetryableError(new Error('429 RESOURCE_EXHAUSTED'))).toBe(true);
+    });
+
+    test('retries on "high demand" message', () => {
+      expect(isRetryableError(new Error('This model is currently experiencing high demand'))).toBe(true);
+    });
+
+    test('retries on network errors', () => {
+      expect(isRetryableError(new Error('ECONNRESET'))).toBe(true);
+      expect(isRetryableError(new Error('ETIMEDOUT'))).toBe(true);
+    });
+
+    test('does NOT retry on 400 bad request', () => {
+      expect(isRetryableError(new Error('400 INVALID_ARGUMENT: bad input'))).toBe(false);
+    });
+
+    test('does NOT retry on API key errors', () => {
+      expect(isRetryableError(new Error('API key not valid'))).toBe(false);
+    });
+
+    test('does NOT retry on generic errors', () => {
+      expect(isRetryableError(new Error('Something went wrong'))).toBe(false);
+    });
+  });
+
+  describe('classifyGeminiError', () => {
+    test('classifies 503 as user-friendly Hebrew message', () => {
+      const result = classifyGeminiError(new Error('[503 Service Unavailable] high demand'));
+      expect(result.status).toBe(503);
+      expect(result.userMessage).toMatch(/עמוס/); // "busy/overloaded" in Hebrew
+    });
+
+    test('classifies 429 as rate limit', () => {
+      const result = classifyGeminiError(new Error('429 RESOURCE_EXHAUSTED'));
+      expect(result.status).toBe(429);
+      expect(result.userMessage).toMatch(/מגבלת/); // "limit" in Hebrew
+    });
+
+    test('classifies API key errors as server config issue', () => {
+      const result = classifyGeminiError(new Error('API key not valid'));
+      expect(result.status).toBe(500);
+      expect(result.userMessage).toMatch(/הגדרות/); // "settings" in Hebrew
+    });
+
+    test('classifies unknown errors with generic message', () => {
+      const result = classifyGeminiError(new Error('Something unexpected'));
+      expect(result.status).toBe(500);
+      expect(result.userMessage).toMatch(/שגיאה/); // "error" in Hebrew
+    });
+  });
+});
+
 describe('JWT Auth', () => {
   const jwt = require('jsonwebtoken');
   const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';

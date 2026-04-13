@@ -213,13 +213,26 @@ ${transcript.substring(0, 15000)}`;
 }
 
 // ─── Tier 3: Gemini multimodal video analysis ──────────────────────────────
-// Passes the YouTube URL directly to gemini-2.0-flash which supports video URL input.
+// Passes the YouTube URL directly to gemini-2.5-flash which supports video URL input.
+// Includes retry logic for transient API errors (503, 429).
+const TIER3_MAX_RETRIES = 3;
+const TIER3_BASE_DELAY_MS = 1000;
+
+function isTier3RetryableError(error) {
+  const msg = error.message || '';
+  return (
+    msg.includes('503') || msg.includes('429') ||
+    msg.includes('Service Unavailable') || msg.includes('high demand') ||
+    msg.includes('overloaded') || msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('UNAVAILABLE') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT')
+  );
+}
+
 async function tier3VideoAnalysis(videoId, videoTitle, userId) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  // gemini-2.5-flash supports YouTube URL input for multimodal video analysis
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -236,26 +249,42 @@ ${RECIPE_JSON_STRUCTURE}
 - Include all cooking steps, temperatures, and times visible or audible in the video
 - Ignore intro, outro, sponsor mentions, and non-recipe conversation`;
 
-  const result = await model.generateContent([
-    {
-      fileData: {
-        mimeType: 'video/mp4',
-        fileUri: youtubeUrl,
-      },
-    },
-    { text: promptText },
-  ]);
+  let lastError;
+  for (let attempt = 0; attempt <= TIER3_MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent([
+        {
+          fileData: {
+            mimeType: 'video/mp4',
+            fileUri: youtubeUrl,
+          },
+        },
+        { text: promptText },
+      ]);
 
-  const text = result.response.text();
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Gemini video analysis returned no JSON');
+      const text = result.response.text();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Gemini video analysis returned no JSON');
 
-  const recipe = JSON.parse(jsonMatch[0]);
-  if (!recipe.ingredients?.length || !recipe.instructions?.length) {
-    throw new Error('Gemini video analysis did not extract a valid recipe');
+      const recipe = JSON.parse(jsonMatch[0]);
+      if (!recipe.ingredients?.length || !recipe.instructions?.length) {
+        throw new Error('Gemini video analysis did not extract a valid recipe');
+      }
+
+      return recipe;
+    } catch (error) {
+      lastError = error;
+      if (attempt < TIER3_MAX_RETRIES && isTier3RetryableError(error)) {
+        const delay = TIER3_BASE_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[YouTube Tier 3] Attempt ${attempt + 1} failed (${error.message}), retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        break;
+      }
+    }
   }
 
-  return recipe;
+  throw lastError;
 }
 
 // ─── Main: Try all 3 tiers in order ───────────────────────────────────────
