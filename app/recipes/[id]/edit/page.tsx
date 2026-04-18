@@ -52,8 +52,9 @@ export default function EditRecipePage() {
       toast.success("המתכון עודכן");
       router.replace(`/recipes/${recipe.id}`);
     } catch (err) {
-      console.error(err);
-      toast.error("שגיאה בעדכון");
+      console.error("updateRecipe failed:", err);
+      const detail = err instanceof Error ? err.message : "";
+      toast.error(detail ? `שגיאה בעדכון: ${detail}` : "שגיאה בעדכון");
       setSaving(false);
     }
   }

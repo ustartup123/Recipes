@@ -76,8 +76,9 @@ export default function NewRecipePage() {
       toast.success("המתכון נשמר");
       router.replace(`/recipes/${id}`);
     } catch (err) {
-      console.error(err);
-      toast.error("שגיאה בשמירה");
+      console.error("createRecipe failed:", err);
+      const detail = err instanceof Error ? err.message : "";
+      toast.error(detail ? `שגיאה בשמירה: ${detail}` : "שגיאה בשמירה");
       setSaving(false);
     }
   }

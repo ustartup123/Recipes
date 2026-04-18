@@ -1,6 +1,10 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  getFirestore,
+  type Firestore,
+} from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 export const isFirebaseConfigured =
@@ -60,7 +64,18 @@ export function getFirebaseAuth(): Auth {
 }
 
 export function getFirestoreDb(): Firestore {
-  if (!db) db = getFirestore(getFirebaseApp());
+  if (!db) {
+    const app = getFirebaseApp();
+    // `ignoreUndefinedProperties` lets us pass optional fields (imageUrl,
+    // sourceUrl) as undefined without Firestore throwing "Unsupported field
+    // value". initializeFirestore must run before getFirestore for a given
+    // app, so fall back if something else beat us to it.
+    try {
+      db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+    } catch {
+      db = getFirestore(app);
+    }
+  }
   return db;
 }
 
