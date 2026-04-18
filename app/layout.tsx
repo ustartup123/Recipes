@@ -25,8 +25,8 @@ checkServerEnv();
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Recipes",
-  description: "Personal recipe library",
+  title: "מתכונים",
+  description: "ספריית המתכונים האישית שלי",
 };
 
 export default function RootLayout({
@@ -35,12 +35,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${firaCode.variable} ${firaSans.variable}`}>
+    <html lang="he" dir="rtl" className={`dark ${firaCode.variable} ${firaSans.variable}`}>
       <body className="min-h-screen bg-slate-950">
         <AuthProvider>
           {children}
           <Toaster
-            position="bottom-right"
+            position="bottom-left"
             toastOptions={{
               style: {
                 background: "#1e293b",

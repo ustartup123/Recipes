@@ -10,13 +10,16 @@ import {
   X,
   ChevronDown,
   Sparkles,
+  BookOpen,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
 
-// Add top-level nav entries here as you build them, e.g.
-//   { href: "/dashboard", label: "Home", icon: Home },
-const navItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [];
+const navItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { href: "/recipes", label: "המתכונים שלי", icon: BookOpen },
+  { href: "/recipes/new", label: "מתכון חדש", icon: Plus },
+];
 
 export function Navbar() {
   const { user, signOut } = useAuth();
@@ -34,7 +37,7 @@ export function Navbar() {
                 <Sparkles className="h-4 w-4 text-teal-400" />
               </div>
               <span className="font-mono font-bold text-slate-100 text-sm hidden sm:block">
-                Recipes
+                מתכונים
               </span>
             </Link>
 

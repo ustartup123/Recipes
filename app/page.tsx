@@ -1,5 +1,22 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 export default function Home() {
-  redirect("/login");
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    router.replace(user ? "/recipes" : "/login");
+  }, [user, loading, router]);
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-slate-950">
+      <LoadingSpinner className="h-8 w-8" />
+    </div>
+  );
 }

@@ -25,12 +25,12 @@ export default function LoginPage() {
 
   function handleDevSignIn() {
     signInAsDev();
-    router.replace("/settings");
+    router.replace("/recipes");
   }
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/settings");
+      router.replace("/recipes");
     }
   }, [user, loading, router]);
 
