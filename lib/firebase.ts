@@ -3,6 +3,8 @@ import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import {
   initializeFirestore,
   getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   type Firestore,
 } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
@@ -70,8 +72,16 @@ export function getFirestoreDb(): Firestore {
     // sourceUrl) as undefined without Firestore throwing "Unsupported field
     // value". initializeFirestore must run before getFirestore for a given
     // app, so fall back if something else beat us to it.
+    // `persistentLocalCache` keeps Firestore data in IndexedDB so reloads
+    // render instantly from cache and refresh in the background.
     try {
-      db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+      db = initializeFirestore(app, {
+        ignoreUndefinedProperties: true,
+        localCache:
+          typeof window !== "undefined"
+            ? persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+            : undefined,
+      });
     } catch {
       db = getFirestore(app);
     }

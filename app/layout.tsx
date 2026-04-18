@@ -9,14 +9,14 @@ const firaCode = Fira_Code({
   subsets: ["latin"],
   variable: "--font-fira-code",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "700"],
 });
 
 const firaSans = Fira_Sans({
   subsets: ["latin"],
   variable: "--font-fira-sans",
   display: "swap",
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "700"],
 });
 
 checkServerEnv();
