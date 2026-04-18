@@ -25,8 +25,8 @@ checkServerEnv();
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "App",
-  description: "Next.js + Firebase app",
+  title: "Recipes",
+  description: "Personal recipe library",
 };
 
 export default function RootLayout({

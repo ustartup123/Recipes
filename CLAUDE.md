@@ -1,6 +1,6 @@
-# {{APP_NAME}}
+# Recipes
 
-> Replace `{{APP_NAME}}` with your app name when scaffolding from this template.
+Personal recipe library with AI-assisted import (parse URLs, text, and YouTube videos into structured recipes). Hebrew UI (RTL). Port of the legacy Express + Vite Recipes app onto the next-firebase-template stack.
 
 ## Stack
 
@@ -28,8 +28,8 @@ without a passing local build. This avoids wasting time on remote build
 failures that take 2+ minutes per attempt.
 
 ### Vercel deployment
-- Project: {{VERCEL_PROJECT}}
-- Production URL: {{PRODUCTION_URL}}
+- Project: recipes
+- Production URL: TBD (filled after first deploy)
 - Deploy command: `npx vercel --prod --yes`
 
 ### Fix-deploy pipeline (MANDATORY for every fix)

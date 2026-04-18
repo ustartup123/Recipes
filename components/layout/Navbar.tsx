@@ -34,7 +34,7 @@ export function Navbar() {
                 <Sparkles className="h-4 w-4 text-teal-400" />
               </div>
               <span className="font-mono font-bold text-slate-100 text-sm hidden sm:block">
-                App
+                Recipes
               </span>
             </Link>
 
