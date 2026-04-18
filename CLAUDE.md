@@ -70,3 +70,37 @@ with this summary line:
 - Never suggest hardcoded default key values as fallbacks
 - Always include a startup check that fails loudly if required secrets
   are missing (see `lib/env-check.ts`)
+
+## Debugging Firebase/GCP issues
+
+Earned the hard way. Read this before chasing client-code hypotheses
+when something touching Firebase fails.
+
+### Invoke `firebase-basics` first
+Any symptom involving Firebase Auth, Firestore, or Storage: invoke the
+`firebase-basics` skill BEFORE any other debugging tool. Its
+provisioning-check steps catch the bugs that look like client-code bugs
+but aren't.
+
+### Check the component boundary before editing code
+When a browser action hangs talking to an external service (Firestore,
+a third-party API), do NOT start with client-code hypotheses. Inspect
+the request at the boundary first:
+- DevTools → Network → click the failing request → **Response** tab.
+  No status code + "Provisional headers are shown" = the socket opened
+  but no HTTP response came back. That signature = infra/provisioning
+  issue, not a code bug.
+- Run `npm run preflight` — fails loud if any required Google API is
+  disabled OR the `(default)` Firestore database doesn't exist. This
+  runs automatically as `predev`, so `npm run dev` enforces it.
+- Manual equivalents:
+  ```
+  gcloud services list --enabled --project=recipes-9cfda
+  gcloud firestore databases describe --database='(default)' --project=recipes-9cfda
+  ```
+
+### No symptom fixes before root cause
+Safety nets (timeouts, retries, graceful degradation) are fine to ship,
+but they are NOT substitutes for finding the cause. If three code-level
+fixes have failed to resolve a symptom, stop editing code and verify
+infrastructure/provisioning before the fourth attempt.
