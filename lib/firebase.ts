@@ -70,10 +70,10 @@ export function getFirestoreDb(): Firestore {
     const app = getFirebaseApp();
     // `ignoreUndefinedProperties` lets us pass optional fields (imageUrl,
     // sourceUrl) as undefined without Firestore throwing "Unsupported field
-    // value". initializeFirestore must run before getFirestore for a given
-    // app, so fall back if something else beat us to it.
-    // `persistentLocalCache` keeps Firestore data in IndexedDB so reloads
-    // render instantly from cache and refresh in the background.
+    // value". Try persistentLocalCache first for instant reloads; if the
+    // browser can't open IndexedDB (private mode, stale lock, etc.) fall
+    // back to a fresh init *without* localCache so ignoreUndefinedProperties
+    // still takes effect.
     try {
       db = initializeFirestore(app, {
         ignoreUndefinedProperties: true,
@@ -82,8 +82,13 @@ export function getFirestoreDb(): Firestore {
             ? persistentLocalCache({ tabManager: persistentMultipleTabManager() })
             : undefined,
       });
-    } catch {
-      db = getFirestore(app);
+    } catch (e) {
+      console.warn("[firebase] persistentLocalCache unavailable, falling back:", e);
+      try {
+        db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+      } catch {
+        db = getFirestore(app);
+      }
     }
   }
   return db;

@@ -52,13 +52,27 @@ export async function createRecipe(
   userId: string,
   data: RecipeInput,
 ): Promise<string> {
-  const ref = await addDoc(collection(db(), COL), {
+  // Guard against silent hangs (addDoc stuck on an unresponsive Firestore
+  // WebChannel). Without this the save button stays on "שומר..." forever.
+  const write = addDoc(collection(db(), COL), {
     ...data,
     userId,
     notes: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            "Firestore write timed out after 20s. Check network / Firestore rules.",
+          ),
+        ),
+      20_000,
+    ),
+  );
+  const ref = await Promise.race([write, timeout]);
   return ref.id;
 }
 
