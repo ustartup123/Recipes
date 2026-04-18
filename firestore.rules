@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Aquariums: user can only access their own
+    match /aquariums/{aquariumId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Events: user can only access their own
+    match /events/{eventId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Analyses: user can only access their own
+    match /analyses/{analysisId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      // Server writes badges via Admin SDK (bypasses rules)
+    }
+
+    // Analysis rate limit counters
+    match /analysisCount/{counterId} {
+      allow read: if request.auth != null;
+      // Only written by Admin SDK (server-side)
+    }
+
+    // User settings (AI Context)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

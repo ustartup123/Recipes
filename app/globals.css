@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-fira-code: 'Fira Code', monospace;
+  --font-fira-sans: 'Fira Sans', sans-serif;
+}
+
+html {
+  color-scheme: dark;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0f172a;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-family: var(--font-fira-sans), sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-fira-code), monospace;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0f172a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-slate-900 border border-slate-800 rounded-xl;
+  }
+  .card-hover {
+    @apply bg-slate-900 border border-slate-800 rounded-xl transition-all duration-200 hover:border-slate-700 cursor-pointer;
+  }
+
+  .input {
+    @apply w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm
+           placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/50
+           transition-colors duration-150;
+  }
+  .input-label {
+    @apply block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide;
+  }
+
+  .btn-primary {
+    @apply bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold rounded-lg px-4 py-2 text-sm
+           transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/50
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg px-4 py-2 text-sm
+           border border-slate-700 hover:border-slate-600 transition-all duration-150 cursor-pointer
+           focus:outline-none focus:ring-2 focus:ring-slate-500/50 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-danger {
+    @apply bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-medium rounded-lg px-4 py-2 text-sm
+           border border-red-500/20 hover:border-red-500/30 transition-all duration-150 cursor-pointer
+           focus:outline-none focus:ring-2 focus:ring-red-500/30;
+  }
+  .btn-ghost {
+    @apply hover:bg-slate-800 text-slate-400 hover:text-slate-200 font-medium rounded-lg px-3 py-2 text-sm
+           transition-all duration-150 cursor-pointer focus:outline-none;
+  }
+
+  .badge-safe {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+           bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
+  }
+  .badge-warning {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+           bg-yellow-500/10 text-yellow-400 border border-yellow-500/20;
+  }
+  .badge-danger {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+           bg-red-500/10 text-red-400 border border-red-500/20;
+  }
+  .badge-unknown {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+           bg-slate-700/50 text-slate-400 border border-slate-700;
+  }
+
+  .section-title {
+    @apply text-lg font-bold text-slate-100;
+    font-family: var(--font-fira-code), monospace;
+  }
+
+  .select {
+    @apply input appearance-none cursor-pointer;
+  }
+}
+
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  border-radius: 8px !important;
+  color: #f1f5f9 !important;
+  font-size: 12px !important;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+}
+.glow-danger-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
