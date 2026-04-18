@@ -1,6 +1,6 @@
 {
-  "name": "aquatrack",
-  "version": "0.3.0",
+  "name": "next-firebase-template",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

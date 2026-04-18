@@ -1,6 +1,6 @@
 {
   "projects": {
-    "default": "aquatrack-ae76b"
+    "default": "your-firebase-project-id"
   },
   "targets": {},
   "etags": {}

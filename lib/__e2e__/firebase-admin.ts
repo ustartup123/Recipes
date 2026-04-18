@@ -4,7 +4,7 @@ export function getAdminAuth() {
   return {
     verifyIdToken: async () => ({
       uid: "test-uid-e2e",
-      email: "test@aquatrack.dev",
+      email: "test@example.dev",
     }),
   };
 }
@@ -15,5 +15,5 @@ export function getAdminDb() {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function verifyAuthToken(_authHeader: string | null) {
-  return { uid: "test-uid-e2e", email: "test@aquatrack.dev" };
+  return { uid: "test-uid-e2e", email: "test@example.dev" };
 }

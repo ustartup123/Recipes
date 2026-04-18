@@ -25,7 +25,7 @@ export function PageLoader() {
             <Fish className="h-6 w-6 text-teal-400" />
           </div>
         </div>
-        <p className="text-slate-500 text-sm font-mono">Loading AquaTrack...</p>
+        <p className="text-slate-500 text-sm font-mono">Loading...</p>
       </div>
     </div>
   );

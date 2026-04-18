@@ -1,6 +1,6 @@
 /**
  * Client-side image resize and compression utilities for AI advisor.
- * Balances quality (enough to identify fish/tank issues) with cost (smaller payloads for Gemini).
+ * Balances quality with cost (small payloads for upload / vision APIs).
  */
 
 const MAX_DIMENSION = 1024;

@@ -9,7 +9,7 @@ import { createContext, useContext, type ReactNode } from "react";
 
 const mockUser = {
   uid: "test-uid-e2e",
-  email: "test@aquatrack.dev",
+  email: "test@example.dev",
   displayName: "E2E Test User",
   photoURL: null,
   emailVerified: true,

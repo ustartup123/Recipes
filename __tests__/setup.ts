@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
     prefetch: vi.fn(),
   }),
   usePathname: () => "/dashboard",
-  useParams: () => ({ id: "test-aquarium-id" }),
+  useParams: () => ({ id: "test-id" }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

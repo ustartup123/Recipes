@@ -2,30 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { cn } from "@/lib/utils";
 import {
-  Home,
-  Bot,
-  Fish,
   Settings,
   LogOut,
   Menu,
   X,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
 
-const navItems = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/advisor", label: "AI Advisor", icon: Bot },
-];
+// Add top-level nav entries here as you build them, e.g.
+//   { href: "/dashboard", label: "Home", icon: Home },
+const navItems: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [];
 
 export function Navbar() {
   const { user, signOut } = useAuth();
-  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
@@ -35,35 +29,27 @@ export function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
-            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+            <Link href="/" className="flex items-center gap-2.5 group">
               <div className="h-8 w-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center group-hover:border-teal-500/60 transition-colors">
-                <Fish className="h-4 w-4 text-teal-400" />
+                <Sparkles className="h-4 w-4 text-teal-400" />
               </div>
               <span className="font-mono font-bold text-slate-100 text-sm hidden sm:block">
-                Aqua<span className="text-teal-400">Track</span>
+                App
               </span>
             </Link>
 
             {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-1">
-              {navItems.map(({ href, label, icon: Icon }) => {
-                const active = pathname.startsWith(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer",
-                      active
-                        ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </Link>
-                );
-              })}
+              {navItems.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all duration-150 cursor-pointer"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </Link>
+              ))}
             </div>
 
             {/* User menu */}
@@ -124,40 +110,34 @@ export function Navbar() {
               </div>
 
               {/* Mobile menu toggle */}
-              <button
-                onClick={() => setMobileOpen(!mobileOpen)}
-                className="md:hidden p-2 rounded-lg hover:bg-slate-800 text-slate-400 cursor-pointer transition-colors"
-                aria-label="Toggle mobile menu"
-              >
-                {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </button>
+              {navItems.length > 0 && (
+                <button
+                  onClick={() => setMobileOpen(!mobileOpen)}
+                  className="md:hidden p-2 rounded-lg hover:bg-slate-800 text-slate-400 cursor-pointer transition-colors"
+                  aria-label="Toggle mobile menu"
+                >
+                  {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Mobile nav */}
-        {mobileOpen && (
+        {mobileOpen && navItems.length > 0 && (
           <div className="md:hidden border-t border-slate-800 bg-slate-950 px-4 py-3">
             <div className="grid grid-cols-2 gap-1">
-              {navItems.map(({ href, label, icon: Icon }) => {
-                const active = pathname.startsWith(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      "flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
-                      active
-                        ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Link>
-                );
-              })}
+              {navItems.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              ))}
             </div>
           </div>
         )}

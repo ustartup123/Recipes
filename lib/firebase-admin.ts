@@ -11,7 +11,7 @@ function getAdminApp(): App {
     if (getApps().length === 0) {
       const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
       if (!projectId) {
-        throw new Error("[AquaTrack] NEXT_PUBLIC_FIREBASE_PROJECT_ID is not set.");
+        throw new Error("[firebase] NEXT_PUBLIC_FIREBASE_PROJECT_ID is not set.");
       }
 
       const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;

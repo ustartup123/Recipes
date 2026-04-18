@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Fira_Code, Fira_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
-import { UserPreferencesProvider } from "@/context/UserPreferencesContext";
 import { Toaster } from "react-hot-toast";
 import { checkServerEnv } from "@/lib/env-check";
 
@@ -26,9 +25,8 @@ checkServerEnv();
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "AquaTrack — Freshwater Aquarium Tracker",
-  description:
-    "Track water parameters, manage multiple aquariums, and get AI-powered advice for your freshwater tanks.",
+  title: "App",
+  description: "Next.js + Firebase app",
 };
 
 export default function RootLayout({
@@ -40,9 +38,7 @@ export default function RootLayout({
     <html lang="en" className={`dark ${firaCode.variable} ${firaSans.variable}`}>
       <body className="min-h-screen bg-slate-950">
         <AuthProvider>
-          <UserPreferencesProvider>
           {children}
-          </UserPreferencesProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

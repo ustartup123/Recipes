@@ -19,7 +19,7 @@ const DEV_LOGIN_PARAM = "dev-login";
 
 const devMockUser = {
   uid: "dev-test-uid",
-  email: "dev@aquatrack.local",
+  email: "dev@example.local",
   displayName: "Dev Test User",
   photoURL: null,
   emailVerified: true,
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Dev bypass: if NODE_ENV is development and ?dev-login is present,
     // skip Firebase entirely and inject a mock user.
     if (IS_DEV && hasDevLoginParam()) {
-      console.info("[AquaTrack] Dev auth bypass active — signed in as Dev Test User");
+      console.info("[auth] Dev auth bypass active — signed in as Dev Test User");
       setUser(devMockUser);
       setIsDevBypass(true);
       setLoading(false);
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signInWithPopup(getFirebaseAuth(), getGoogleProvider());
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
-      console.error("[AquaTrack] Google sign-in failed:", error.code, error.message);
+      console.error("[auth] Google sign-in failed:", error.code, error.message);
       throw err;
     }
   }

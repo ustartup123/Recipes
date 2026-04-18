@@ -48,7 +48,7 @@ function assertClientEnv() {
 
   if (missing.length > 0) {
     console.error(
-      `[AquaTrack] Missing Firebase env vars:\n${missing.map((k) => `  • ${k}`).join("\n")}\nCopy .env.example → .env and fill in your Firebase credentials.`
+      `[firebase] Missing Firebase env vars:\n${missing.map((k) => `  • ${k}`).join("\n")}\nCopy .env.example → .env and fill in your Firebase credentials.`
     );
   }
 }
