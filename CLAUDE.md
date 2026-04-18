@@ -29,7 +29,7 @@ failures that take 2+ minutes per attempt.
 
 ### Vercel deployment
 - Project: recipes
-- Production URL: TBD (filled after first deploy)
+- Production URL: https://recipes-rho-plum.vercel.app
 - Deploy command: `npx vercel --prod --yes`
 
 ### Fix-deploy pipeline (MANDATORY for every fix)
