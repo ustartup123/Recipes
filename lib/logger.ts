@@ -65,13 +65,13 @@ export function serializeError(err: unknown): Record<string, unknown> {
       message: err.message,
       stack: err.stack,
       // carry over useful custom fields (e.g. GeminiError.status)
-      ...(typeof (err as { status?: unknown }).status === "number"
-        ? { status: (err as { status: number }).status }
+      ...(typeof (err as unknown as { status?: unknown }).status === "number"
+        ? { status: (err as unknown as { status: number }).status }
         : {}),
-      ...(typeof (err as { originalMessage?: unknown }).originalMessage ===
-      "string"
+      ...(typeof (err as unknown as { originalMessage?: unknown })
+        .originalMessage === "string"
         ? {
-            originalMessage: (err as { originalMessage: string })
+            originalMessage: (err as unknown as { originalMessage: string })
               .originalMessage,
           }
         : {}),
