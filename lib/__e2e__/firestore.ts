@@ -1,17 +1,15 @@
+/* eslint-disable */
 /**
  * E2E mock — replaces @/lib/firestore via Playwright route interception.
  *
  * Returns in-memory data so the app renders without a real Firestore.
- * Multi-step flows (create → list) work because mutations update the store.
- *
  * Mirror the exports of ../firestore.ts here as you add them.
  */
 
-import type { Item } from "../types";
+import type { Recipe, RecipeInput, RecipeUpdate, RecipeNote } from "../types";
 
 // ─── Timestamp helper ────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ts(daysAgo = 0): any {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
@@ -28,45 +26,83 @@ function genId() {
   return `mock-${++nextId}`;
 }
 
-// ─── Seed data ───────────────────────────────────────────────────────────────
+// ─── Store ───────────────────────────────────────────────────────────────────
 
 const mockStore = {
-  items: [] as Item[],
+  recipes: [] as Recipe[],
 };
 
-// ─── Items ───────────────────────────────────────────────────────────────────
+// ─── Recipe CRUD ─────────────────────────────────────────────────────────────
 
-export async function getItems(userId: string): Promise<Item[]> {
-  return mockStore.items
-    .filter((i) => i.userId === userId)
-    .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0));
+export async function getRecipes(userId: string): Promise<Recipe[]> {
+  return mockStore.recipes
+    .filter((r) => r.userId === userId)
+    .sort(
+      (a, b) =>
+        (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0),
+    );
 }
 
-export async function createItem(
+export async function getRecipe(id: string): Promise<Recipe | null> {
+  return mockStore.recipes.find((r) => r.id === id) ?? null;
+}
+
+export async function createRecipe(
   userId: string,
-  data: Omit<Item, "id" | "userId" | "createdAt" | "updatedAt">
+  data: RecipeInput,
 ): Promise<string> {
   const id = genId();
-  mockStore.items.push({
+  mockStore.recipes.push({
     ...data,
     id,
     userId,
+    notes: [],
     createdAt: ts(0),
     updatedAt: ts(0),
-  } as Item);
+  } as Recipe);
   return id;
 }
 
-export async function updateItem(
+export async function updateRecipe(
   id: string,
-  data: Partial<Omit<Item, "id" | "userId" | "createdAt">>
+  data: RecipeUpdate,
 ): Promise<void> {
-  const idx = mockStore.items.findIndex((i) => i.id === id);
+  const idx = mockStore.recipes.findIndex((r) => r.id === id);
   if (idx >= 0) {
-    mockStore.items[idx] = { ...mockStore.items[idx], ...data, updatedAt: ts(0) };
+    mockStore.recipes[idx] = {
+      ...mockStore.recipes[idx],
+      ...data,
+      updatedAt: ts(0),
+    };
   }
 }
 
-export async function deleteItem(id: string): Promise<void> {
-  mockStore.items = mockStore.items.filter((i) => i.id !== id);
+export async function deleteRecipe(id: string): Promise<void> {
+  mockStore.recipes = mockStore.recipes.filter((r) => r.id !== id);
+}
+
+// ─── Notes ───────────────────────────────────────────────────────────────────
+
+export async function addRecipeNote(
+  recipeId: string,
+  content: string,
+): Promise<RecipeNote> {
+  const recipe = mockStore.recipes.find((r) => r.id === recipeId);
+  if (!recipe) throw new Error("Recipe not found");
+  const note: RecipeNote = {
+    id: genId(),
+    content,
+    createdAt: ts(0),
+  };
+  recipe.notes = [...recipe.notes, note];
+  return note;
+}
+
+export async function deleteRecipeNote(
+  recipeId: string,
+  noteId: string,
+): Promise<void> {
+  const recipe = mockStore.recipes.find((r) => r.id === recipeId);
+  if (!recipe) throw new Error("Recipe not found");
+  recipe.notes = recipe.notes.filter((n) => n.id !== noteId);
 }

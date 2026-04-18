@@ -1,17 +1,41 @@
 /**
- * Domain types for your app.
+ * Domain types for Recipes.
  *
- * Replace this placeholder with your own entity types. The template includes
- * a simple `Item` example to show the pattern: every user-scoped document
- * should carry `userId` so Firestore rules can enforce per-user isolation.
+ * Every user-scoped Firestore document carries `userId` so security rules
+ * can enforce per-user isolation.
  */
 import { Timestamp } from "firebase/firestore";
 
-export interface Item {
+export interface Ingredient {
+  name: string;
+  amount: string;
+}
+
+export interface RecipeNote {
+  id: string;
+  content: string;
+  createdAt: Timestamp;
+}
+
+export interface Recipe {
   id: string;
   userId: string;
-  name: string;
-  notes?: string;
+  title: string;
+  ingredients: Ingredient[];
+  instructions: string[];
+  tags: string[];
+  imageUrl?: string;
+  sourceUrl?: string;
+  notes: RecipeNote[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+/** Input shape for createRecipe — omits server-generated fields. */
+export type RecipeInput = Omit<
+  Recipe,
+  "id" | "userId" | "notes" | "createdAt" | "updatedAt"
+>;
+
+/** Input shape for updateRecipe — all editable fields are optional. */
+export type RecipeUpdate = Partial<RecipeInput>;
