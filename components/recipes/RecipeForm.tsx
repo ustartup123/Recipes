@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, KeyboardEvent } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { useRef, useState, KeyboardEvent } from "react";
+import { Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import toast from "react-hot-toast";
 import type { Ingredient, RecipeInput } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
+import { uploadRecipeImage, UploadError } from "@/lib/storage";
 
 interface Props {
   initial?: Partial<RecipeInput>;
@@ -11,6 +14,9 @@ interface Props {
 }
 
 export function RecipeForm({ initial, loading, onSubmit }: Props) {
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     initial?.ingredients && initial.ingredients.length > 0
@@ -30,6 +36,28 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
     setIngredients((ings) =>
       ings.map((ing, idx) => (idx === i ? { ...ing, [field]: value } : ing)),
     );
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+    try {
+      const url = await uploadRecipeImage(user.uid, file);
+      setImageUrl(url);
+      toast.success("התמונה הועלתה");
+    } catch (err) {
+      const msg =
+        err instanceof UploadError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "שגיאה בהעלאה";
+      toast.error(msg);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   function addTag(e: KeyboardEvent<HTMLInputElement>) {
@@ -70,15 +98,45 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
       </div>
 
       <div>
-        <label className="input-label">תמונה (קישור)</label>
-        <input
-          className="input"
-          type="url"
-          dir="ltr"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          placeholder="https://example.com/image.jpg"
-        />
+        <label className="input-label">תמונה</label>
+        <div className="flex gap-2">
+          <input
+            className="input flex-1"
+            type="url"
+            dir="ltr"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg"
+          />
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-1.5 text-sm whitespace-nowrap"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            {uploading ? "מעלה..." : "העלה"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+        </div>
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt="תצוגה מקדימה"
+            className="mt-2 h-32 rounded-lg object-cover border border-slate-700"
+          />
+        )}
       </div>
 
       <div>
