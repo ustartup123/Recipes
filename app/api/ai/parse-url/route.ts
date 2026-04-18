@@ -8,24 +8,51 @@ import {
 } from "@/lib/gemini";
 import { fetchUrl, extractRecipeContent } from "@/lib/ai/fetch-and-extract";
 import { urlPrompt, extractJson } from "@/lib/ai/prompts";
-import logger from "@/lib/logger";
+import logger, {
+  elapsedMs,
+  serializeError,
+  startTimer,
+  withRequest,
+} from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid";
+  }
+}
+
 export async function POST(req: NextRequest) {
+  const log = withRequest(logger, req, "parse-url");
+  const start = startTimer();
+  log.info("request: start");
+
   try {
     const decoded = await verifyAuthToken(req.headers.get("authorization"));
+    const userLog = log.child({ userId: decoded.uid });
+    userLog.info("auth: ok");
+
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
+      userLog.warn("validation: url missing or not a string");
       return NextResponse.json({ error: "URL is required" }, { status: 400 });
     }
+    const host = hostOf(url);
+    userLog.info({ host }, "validation: url accepted");
 
     let html: string;
     try {
-      html = await fetchUrl(url);
+      html = await fetchUrl(url, userLog);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      userLog.warn(
+        { host, durationMs: elapsedMs(start), err: serializeError(err) },
+        "request: aborted — fetchUrl failed",
+      );
       return NextResponse.json(
         {
           error: `Failed to fetch URL: ${msg}. The site may be blocking automated access.`,
@@ -34,14 +61,22 @@ export async function POST(req: NextRequest) {
       );
     }
     if (!html || html.length < 100) {
+      userLog.warn(
+        { host, bytes: html?.length ?? 0 },
+        "request: aborted — URL returned empty/short content",
+      );
       return NextResponse.json(
         { error: "The URL returned empty or very short content" },
         { status: 400 },
       );
     }
 
-    const extracted = extractRecipeContent(html, url);
+    const extracted = extractRecipeContent(html, url, userLog);
     if (extracted.content.length < 50) {
+      userLog.warn(
+        { host, contentLength: extracted.content.length },
+        "request: aborted — extracted content too short",
+      );
       return NextResponse.json(
         { error: "Could not extract meaningful content from the URL" },
         { status: 400 },
@@ -49,7 +84,10 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+    if (!apiKey) {
+      userLog.error("config: GEMINI_API_KEY is not set");
+      throw new Error("GEMINI_API_KEY is not set");
+    }
     const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
       model: "gemini-2.5-flash",
     });
@@ -61,29 +99,57 @@ export async function POST(req: NextRequest) {
       url,
       hasStructuredData: extracted.hasStructuredData,
     })}`;
+    userLog.info(
+      {
+        promptChars: prompt.length,
+        hasStructuredData: extracted.hasStructuredData,
+      },
+      "gemini: prompt built",
+    );
 
     const result = await callGeminiWithRetry(
       () => model.generateContent(prompt),
-      logger,
+      userLog,
     );
     const text = result.response.text();
+    userLog.info({ responseChars: text.length }, "gemini: response received");
+
     const recipe = extractJson(text) as Record<string, unknown>;
     recipe.imageUrl = extracted.imageUrl;
     recipe.sourceUrl = url;
 
+    userLog.info(
+      {
+        host,
+        durationMs: elapsedMs(start),
+        hasImage: !!extracted.imageUrl,
+      },
+      "request: done",
+    );
     return NextResponse.json(recipe);
   } catch (err) {
     if (err instanceof GeminiError) {
-      logger.error(
-        { originalMessage: err.originalMessage },
-        "Gemini error in parse-url",
+      log.error(
+        {
+          status: err.status,
+          originalMessage: err.originalMessage,
+          durationMs: elapsedMs(start),
+        },
+        "request: failed — Gemini error",
       );
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof Error && err.message.includes("Authorization")) {
+      log.info(
+        { durationMs: elapsedMs(start) },
+        "request: rejected — unauthorized",
+      );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    logger.error({ err }, "parse-url failed");
+    log.error(
+      { durationMs: elapsedMs(start), err: serializeError(err) },
+      "request: failed — unhandled",
+    );
     const { userMessage } = classifyGeminiError(err);
     return NextResponse.json({ error: userMessage }, { status: 500 });
   }

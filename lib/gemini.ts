@@ -75,23 +75,42 @@ export class GeminiError extends Error {
   }
 }
 
+/** Minimal logger shape (kept loose to stay compatible with existing callers). */
+type RetryLog = {
+  info?: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
+  error?: (...args: unknown[]) => void;
+};
+
 /**
  * Call Gemini with automatic retry + exponential backoff for transient errors.
  *
  * @param fn  – a zero-arg async function that calls `model.generateContent(…)`
- * @param log – optional Pino-style logger for retry warnings
+ * @param log – optional Pino-style logger for retry / outcome info
  * @returns     the GenerateContentResult on success
  * @throws      GeminiError with classified status/message on failure
  */
 export async function callGeminiWithRetry(
   fn: () => Promise<GenerateContentResult>,
-  log?: { warn: (...args: unknown[]) => void },
+  log?: RetryLog,
 ): Promise<GenerateContentResult> {
   let lastError: unknown;
+  const start = Date.now();
+
+  if (log?.info) {
+    log.info({ maxRetries: GEMINI_MAX_RETRIES }, "gemini: call start");
+  }
 
   for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
     try {
-      return await fn();
+      const res = await fn();
+      if (log?.info) {
+        log.info(
+          { attempt: attempt + 1, durationMs: Date.now() - start },
+          "gemini: call ok",
+        );
+      }
+      return res;
     } catch (error) {
       lastError = error;
 
@@ -111,5 +130,16 @@ export async function callGeminiWithRetry(
   }
 
   const classified = classifyGeminiError(lastError);
+  if (log?.error) {
+    log.error(
+      {
+        status: classified.status,
+        durationMs: Date.now() - start,
+        originalMessage:
+          lastError instanceof Error ? lastError.message : String(lastError),
+      },
+      "gemini: call failed",
+    );
+  }
   throw new GeminiError(classified, lastError);
 }

@@ -11,14 +11,21 @@ export function checkServerEnv() {
   if (process.env.NEXT_PHASE === "phase-production-build") return;
 
   const required: string[] = [
-    // Add server-only secrets here, e.g. "GEMINI_API_KEY"
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+    "FIREBASE_SERVICE_ACCOUNT_KEY",
+    "GEMINI_API_KEY",
   ];
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
     logger.warn(
       { missing },
-      "Missing required environment variables — copy .env.example → .env and fill in the values"
+      "Missing required environment variables — copy .env.example → .env and fill in the values",
+    );
+  } else {
+    logger.info(
+      { checked: required.length },
+      "Server env check passed — all required keys present",
     );
   }
 }

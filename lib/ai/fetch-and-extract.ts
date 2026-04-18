@@ -4,12 +4,35 @@
  */
 
 import * as cheerio from "cheerio";
+import type { Logger } from "pino";
+import { elapsedMs, serializeError, startTimer } from "@/lib/logger";
 
-export async function fetchUrl(rawUrl: string): Promise<string> {
+/** Minimal logger shape so callers can pass a pino child or a noop. */
+type LogLike = Pick<Logger, "info" | "warn" | "error" | "debug">;
+const NOOP_LOG: LogLike = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid";
+  }
+}
+
+export async function fetchUrl(
+  rawUrl: string,
+  log: LogLike = NOOP_LOG,
+): Promise<string> {
   let url: string;
   try {
     url = new URL(rawUrl).href;
   } catch {
+    log.warn({ rawUrl }, "fetchUrl: invalid URL");
     throw new Error(`Invalid URL: ${rawUrl}`);
   }
 
@@ -24,6 +47,10 @@ export async function fetchUrl(rawUrl: string): Promise<string> {
     "Accept-Encoding": "identity",
   };
 
+  const host = hostOf(url);
+  const start = startTimer();
+  log.info({ host }, "fetchUrl: start");
+
   try {
     const response = await fetch(url, {
       headers,
@@ -32,14 +59,45 @@ export async function fetchUrl(rawUrl: string): Promise<string> {
     });
     clearTimeout(timeout);
     if (!response.ok) {
+      log.warn(
+        {
+          host,
+          status: response.status,
+          statusText: response.statusText,
+          durationMs: elapsedMs(start),
+        },
+        "fetchUrl: non-OK response",
+      );
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    return await response.text();
+    const body = await response.text();
+    log.info(
+      {
+        host,
+        status: response.status,
+        bytes: body.length,
+        durationMs: elapsedMs(start),
+      },
+      "fetchUrl: done",
+    );
+    return body;
   } catch (error) {
     clearTimeout(timeout);
     if (error instanceof Error && error.name === "AbortError") {
+      log.warn(
+        { host, durationMs: elapsedMs(start) },
+        "fetchUrl: timeout after 15s",
+      );
       throw new Error("Request timed out after 15 seconds");
     }
+    log.warn(
+      {
+        host,
+        durationMs: elapsedMs(start),
+        err: serializeError(error),
+      },
+      "fetchUrl: failed",
+    );
     throw error;
   }
 }
@@ -56,7 +114,9 @@ export interface ExtractedContent {
 export function extractRecipeContent(
   html: string,
   url: string,
+  log: LogLike = NOOP_LOG,
 ): ExtractedContent {
+  const start = startTimer();
   const $ = cheerio.load(html);
 
   // === Strategy 1: JSON-LD Recipe schema ===
@@ -98,8 +158,10 @@ export function extractRecipeContent(
   }
 
   const contentParts: string[] = [];
+  const strategiesUsed: string[] = [];
 
   if (recipeSchema) {
+    strategiesUsed.push("json-ld");
     contentParts.push(
       "=== STRUCTURED RECIPE DATA (JSON-LD) ===\n" +
         JSON.stringify(recipeSchema, null, 2),
@@ -111,6 +173,7 @@ export function extractRecipeContent(
   if (wprm.length) {
     const text = wprm.text().replace(/\s+/g, " ").trim();
     if (text.length > 100) {
+      strategiesUsed.push("wprm");
       contentParts.push(
         "=== WORDPRESS RECIPE MAKER ===\n" + text.substring(0, 8000),
       );
@@ -127,6 +190,7 @@ export function extractRecipeContent(
     }
   });
   if (microdataText.length > 3) {
+    strategiesUsed.push("microdata");
     contentParts.push(
       "=== RECIPE MICRODATA ===\n" + microdataText.join("\n"),
     );
@@ -164,10 +228,12 @@ export function extractRecipeContent(
   ];
 
   let mainContent = "";
+  let matchedSelector = "";
   for (const selector of contentSelectors) {
     const text = $clean(selector).first().text().replace(/\s+/g, " ").trim();
     if (text.length > 200) {
       mainContent = text;
+      matchedSelector = selector;
       break;
     }
   }
@@ -182,12 +248,14 @@ export function extractRecipeContent(
     }
   });
   if (listItems.length > 0) {
+    strategiesUsed.push(`list-items(${listItems.length})`);
     contentParts.push(
       "=== LIST ITEMS FROM PAGE ===\n" + listItems.slice(0, 60).join("\n"),
     );
   }
 
   if (mainContent) {
+    strategiesUsed.push(`body:${matchedSelector}`);
     contentParts.push(
       "=== PAGE TEXT CONTENT ===\n" + mainContent.substring(0, 15000),
     );
@@ -198,11 +266,26 @@ export function extractRecipeContent(
   const metaDescription =
     $('meta[name="description"]').attr("content") || "";
 
-  return {
+  const result = {
     content: contentParts.join("\n\n").substring(0, 25000),
     pageTitle,
     metaDescription,
     imageUrl,
     hasStructuredData: !!recipeSchema,
   };
+
+  log.info(
+    {
+      host: hostOf(url),
+      strategiesUsed,
+      hasStructuredData: result.hasStructuredData,
+      hasImage: !!imageUrl,
+      titleLength: pageTitle.length,
+      contentLength: result.content.length,
+      durationMs: elapsedMs(start),
+    },
+    "extractRecipeContent: done",
+  );
+
+  return result;
 }
