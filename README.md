@@ -49,22 +49,38 @@ server-side request gets a request-scoped child logger with these fields:
 
 ### Tailing production logs
 
+Run from this project directory (the Vercel link in `.vercel/` scopes
+the command to the `recipes` project). The CLI's newer `logs` command is
+historical by default; pass `--follow` for live streaming.
+
 ```bash
-# Live tail (stream all production logs)
-npx vercel logs recipes --follow
+# Recent logs (last 24h, linked project, current branch)
+npx vercel logs
 
-# Last hour, filter to the parse-url route
-npx vercel logs recipes --since 1h | grep '"route":"parse-url"'
+# Live stream (5-min session)
+npx vercel logs --follow
 
-# Follow one request end-to-end once you have a reqId from an error
-npx vercel logs recipes --since 1h | grep '<reqId-from-error>'
+# Errors from the last hour, production only
+npx vercel logs --level error --environment production --since 1h
 
-# Only errors
-npx vercel logs recipes --since 1h | grep '"level":"error"'
+# Full-text search across messages (e.g. find one request by reqId)
+npx vercel logs --query "<reqId-from-an-error>" --expand
 
-# One user's requests
-npx vercel logs recipes --since 1h | grep '"userId":"<uid>"'
+# By Vercel request id (shown as x-vercel-id in browser devtools)
+npx vercel logs --request-id <vercel-req-id>
+
+# JSON Lines → jq, filter to one user
+npx vercel logs --json --since 1h \
+  | jq -c 'select(.message | test("\"userId\":\"<uid>\""))'
+
+# 5xx on the parse-url route, last hour
+npx vercel logs --status-code 5xx --since 1h --query "parse-url" --expand
 ```
+
+Pipe `--json` through `jq` for structured filtering on fields the app adds
+(`reqId`, `userId`, `route`, `durationMs`, `host`). Note: those fields live
+inside the stringified log line, so use `jq 'select(.message | test("…"))')`
+rather than `.reqId` directly.
 
 ### Local logs
 
