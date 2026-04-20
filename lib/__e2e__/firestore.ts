@@ -34,17 +34,28 @@ const mockStore = {
 
 // ─── Recipe CRUD ─────────────────────────────────────────────────────────────
 
+// Real Firestore's getDoc returns a fresh object every read, so the caller
+// can mutate / replace fields without ever touching the backing store. Mirror
+// that here — return shallow copies with cloned array fields so a page that
+// keeps the returned recipe in React state doesn't accidentally observe a
+// later mock-side mutation (and re-append the same note twice).
+function cloneRecipe(r: Recipe): Recipe {
+  return { ...r, notes: [...r.notes], ingredients: [...r.ingredients], instructions: [...r.instructions], tags: [...(r.tags ?? [])] };
+}
+
 export async function getRecipes(userId: string): Promise<Recipe[]> {
   return mockStore.recipes
     .filter((r) => r.userId === userId)
     .sort(
       (a, b) =>
         (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0),
-    );
+    )
+    .map(cloneRecipe);
 }
 
 export async function getRecipe(id: string): Promise<Recipe | null> {
-  return mockStore.recipes.find((r) => r.id === id) ?? null;
+  const r = mockStore.recipes.find((r) => r.id === id);
+  return r ? cloneRecipe(r) : null;
 }
 
 export async function createRecipe(
