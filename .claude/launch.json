@@ -6,6 +6,15 @@
       "runtimeExecutable": "/opt/homebrew/bin/node",
       "runtimeArgs": ["node_modules/.bin/next", "dev"],
       "port": 3000
+    },
+    {
+      "name": "Next.js E2E (mocked Firebase)",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["node_modules/.bin/next", "dev", "--port", "3095"],
+      "port": 3095,
+      "env": {
+        "NEXT_PUBLIC_E2E_TEST": "true"
+      }
     }
   ]
 }
