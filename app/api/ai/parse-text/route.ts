@@ -13,6 +13,7 @@ import logger, {
   startTimer,
   withRequest,
 } from "@/lib/logger";
+import { EventType, logEvent } from "@/lib/log-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,12 +21,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const log = withRequest(logger, req, "parse-text");
   const start = startTimer();
-  log.info("request: start");
+  logEvent(log, EventType.API_REQUEST, { method: req.method, route: "parse-text" });
 
   try {
     const decoded = await verifyAuthToken(req.headers.get("authorization"));
     const userLog = log.child({ userId: decoded.uid });
-    userLog.info("auth: ok");
+    logEvent(userLog, EventType.AUTH_SUCCESS, { userId: decoded.uid });
 
     const { text } = await req.json();
     if (!text || typeof text !== "string") {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
 
     const prompt = `[app:recipes-app][user:${decoded.uid}]\n\n${textPrompt(text)}`;
-    userLog.info({ promptChars: prompt.length }, "gemini: prompt built");
+    logEvent(userLog, EventType.GEMINI_CALL, { promptChars: prompt.length });
 
     const result = await callGeminiWithRetry(
       () => model.generateContent(prompt),
@@ -57,15 +58,13 @@ export async function POST(req: NextRequest) {
     );
 
     const recipe = extractJson(responseText);
-    userLog.info(
-      { durationMs: elapsedMs(start) },
-      "request: done",
-    );
+    logEvent(userLog, EventType.RECIPE_PARSE, { durationMs: elapsedMs(start) });
     return NextResponse.json(recipe);
   } catch (err) {
     if (err instanceof GeminiError) {
       log.error(
         {
+          event: EventType.GEMINI_ERROR,
           status: err.status,
           originalMessage: err.originalMessage,
           durationMs: elapsedMs(start),
@@ -75,14 +74,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof Error && err.message.includes("Authorization")) {
-      log.info(
-        { durationMs: elapsedMs(start) },
+      log.warn(
+        { event: EventType.AUTH_FAILURE, durationMs: elapsedMs(start) },
         "request: rejected — unauthorized",
       );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     log.error(
-      { durationMs: elapsedMs(start), err: serializeError(err) },
+      { event: EventType.UNHANDLED_ERROR, durationMs: elapsedMs(start), err: serializeError(err) },
       "request: failed — unhandled",
     );
     const { userMessage } = classifyGeminiError(err);

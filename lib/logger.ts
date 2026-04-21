@@ -1,12 +1,26 @@
 import pino, { type Logger } from "pino";
 
+// Maps pino level labels to GCP Cloud Logging severity strings.
+const GCP_SEVERITY: Record<string, string> = {
+  trace: "DEBUG",
+  debug: "DEBUG",
+  info: "INFO",
+  warn: "WARNING",
+  error: "ERROR",
+  fatal: "CRITICAL",
+};
+
+const isDev = process.env.NODE_ENV === "development";
+
 /**
  * Root logger.
  *
  * In dev: human-readable line per log, pretty-ish.
- * In prod (Vercel): one JSON line per log — searchable via `vercel logs`.
+ * In prod (Vercel / GCP): one JSON line per log with `severity` field for
+ *   Cloud Logging severity-level filtering — searchable via `vercel logs`.
  *   Fields we standardize on:
- *     - level, msg, time (pino defaults)
+ *     - severity / level, msg, time (pino)
+ *     - event: EventType tag (set by logEvent)
  *     - reqId: uuid per request (set by withRequest)
  *     - route: API path (set by withRequest)
  *     - userId: Firebase uid (set per-request once known)
@@ -15,12 +29,16 @@ import pino, { type Logger } from "pino";
  *
  * To tail in production:  npx vercel logs recipes --follow
  * Filter a single request:  ... | grep <reqId>
+ * Filter by event type:     ... | grep GEMINI_CALL
  */
 const logger = pino({
   level: process.env.LOG_LEVEL || "info",
   base: { app: "recipes-app" },
   formatters: {
-    level: (label: string) => ({ level: label }),
+    level: (label: string) =>
+      isDev
+        ? { level: label }
+        : { severity: GCP_SEVERITY[label] ?? "DEFAULT" },
   },
 });
 

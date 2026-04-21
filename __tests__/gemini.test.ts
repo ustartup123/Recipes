@@ -108,7 +108,8 @@ describe("callGeminiWithRetry", () => {
 
     expect(log.warn).toHaveBeenCalledTimes(1);
     expect(log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Attempt 1 failed"),
+      expect.objectContaining({ event: "GEMINI_RETRY", attempt: 1 }),
+      "gemini: retry",
     );
   });
 });

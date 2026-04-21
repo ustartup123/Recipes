@@ -14,6 +14,7 @@ import logger, {
   startTimer,
   withRequest,
 } from "@/lib/logger";
+import { EventType, logEvent } from "@/lib/log-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,12 +30,12 @@ function hostOf(url: string): string {
 export async function POST(req: NextRequest) {
   const log = withRequest(logger, req, "parse-url");
   const start = startTimer();
-  log.info("request: start");
+  logEvent(log, EventType.API_REQUEST, { method: req.method, route: "parse-url" });
 
   try {
     const decoded = await verifyAuthToken(req.headers.get("authorization"));
     const userLog = log.child({ userId: decoded.uid });
-    userLog.info("auth: ok");
+    logEvent(userLog, EventType.AUTH_SUCCESS, { userId: decoded.uid });
 
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
@@ -99,13 +100,11 @@ export async function POST(req: NextRequest) {
       url,
       hasStructuredData: extracted.hasStructuredData,
     })}`;
-    userLog.info(
-      {
-        promptChars: prompt.length,
-        hasStructuredData: extracted.hasStructuredData,
-      },
-      "gemini: prompt built",
-    );
+    logEvent(userLog, EventType.GEMINI_CALL, {
+      promptChars: prompt.length,
+      hasStructuredData: extracted.hasStructuredData,
+      host,
+    });
 
     const result = await callGeminiWithRetry(
       () => model.generateContent(prompt),
@@ -118,19 +117,17 @@ export async function POST(req: NextRequest) {
     recipe.imageUrl = extracted.imageUrl;
     recipe.sourceUrl = url;
 
-    userLog.info(
-      {
-        host,
-        durationMs: elapsedMs(start),
-        hasImage: !!extracted.imageUrl,
-      },
-      "request: done",
-    );
+    logEvent(userLog, EventType.RECIPE_IMPORT, {
+      host,
+      durationMs: elapsedMs(start),
+      hasImage: !!extracted.imageUrl,
+    });
     return NextResponse.json(recipe);
   } catch (err) {
     if (err instanceof GeminiError) {
       log.error(
         {
+          event: EventType.GEMINI_ERROR,
           status: err.status,
           originalMessage: err.originalMessage,
           durationMs: elapsedMs(start),
@@ -140,14 +137,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof Error && err.message.includes("Authorization")) {
-      log.info(
-        { durationMs: elapsedMs(start) },
+      log.warn(
+        { event: EventType.AUTH_FAILURE, durationMs: elapsedMs(start) },
         "request: rejected — unauthorized",
       );
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     log.error(
-      { durationMs: elapsedMs(start), err: serializeError(err) },
+      { event: EventType.UNHANDLED_ERROR, durationMs: elapsedMs(start), err: serializeError(err) },
       "request: failed — unhandled",
     );
     const { userMessage } = classifyGeminiError(err);

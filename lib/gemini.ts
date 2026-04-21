@@ -119,7 +119,8 @@ export async function callGeminiWithRetry(
         const msg = error instanceof Error ? error.message : String(error);
         if (log) {
           log.warn(
-            `[Gemini] Attempt ${attempt + 1} failed (${msg}), retrying in ${delay}ms...`,
+            { event: "GEMINI_RETRY", attempt: attempt + 1, delay, originalMessage: msg },
+            "gemini: retry",
           );
         }
         await new Promise((resolve) => setTimeout(resolve, delay));
