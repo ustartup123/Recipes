@@ -75,13 +75,15 @@ export default function EditRecipePage() {
     <AppShell>
       <Link
         href={`/recipes/${recipe.id}`}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 mb-4"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-700 hover:text-ink-900 mb-5"
       >
         <ArrowRight className="h-4 w-4" />
         חזרה למתכון
       </Link>
-      <h1 className="text-2xl font-bold text-slate-100 mb-6">עריכת מתכון</h1>
-      <div className="card p-5">
+      <h1 className="text-3xl sm:text-4xl font-bold text-ink-900 mb-8 tracking-tight">
+        עריכת מתכון
+      </h1>
+      <div className="card p-6">
         <RecipeForm initial={recipe} loading={saving} onSubmit={handleSubmit} />
       </div>
     </AppShell>

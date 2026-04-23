@@ -91,9 +91,11 @@ export default function NewRecipePage() {
 
   return (
     <AppShell>
-      <h1 className="text-2xl font-bold text-slate-100 mb-6">מתכון חדש</h1>
+      <h1 className="text-3xl sm:text-4xl font-bold text-ink-900 mb-8 tracking-tight">
+        מתכון חדש
+      </h1>
 
-      <div className="flex gap-2 mb-6 border-b border-slate-800">
+      <div className="flex gap-2 mb-8 p-1 bg-white rounded-full shadow-soft border border-surface-300/60 w-fit">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -101,10 +103,10 @@ export default function NewRecipePage() {
               setMode(id);
               setInitial(undefined);
             }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+            className={`flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-all duration-150 cursor-pointer ${
               mode === id
-                ? "border-teal-500 text-teal-400"
-                : "border-transparent text-slate-400 hover:text-slate-200"
+                ? "bg-ink-900 text-white shadow-cta"
+                : "text-ink-700 hover:text-ink-900 hover:bg-surface-200"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -114,7 +116,7 @@ export default function NewRecipePage() {
       </div>
 
       {mode === "url" && !initial && (
-        <div className="card p-5 mb-6">
+        <div className="card p-6 mb-6">
           <label className="input-label">קישור למתכון</label>
           <div className="flex gap-2">
             <input
@@ -126,7 +128,7 @@ export default function NewRecipePage() {
               placeholder="https://example.com/recipe"
             />
             <button
-              className="btn-primary inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="btn-brand whitespace-nowrap"
               onClick={handleParseUrl}
               disabled={parsing || !url.trim()}
             >
@@ -138,16 +140,16 @@ export default function NewRecipePage() {
       )}
 
       {mode === "text" && !initial && (
-        <div className="card p-5 mb-6">
+        <div className="card p-6 mb-6">
           <label className="input-label">הדבק טקסט של המתכון</label>
           <textarea
-            className="input min-h-[180px] mb-3"
+            className="input min-h-[200px] mb-4"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="הדבק כאן את המתכון - הכותרת, המרכיבים והוראות ההכנה..."
           />
           <button
-            className="btn-primary inline-flex items-center gap-1.5"
+            className="btn-brand"
             onClick={handleParseText}
             disabled={parsing || !text.trim()}
           >
@@ -158,7 +160,7 @@ export default function NewRecipePage() {
       )}
 
       {(mode === "manual" || initial) && (
-        <div className="card p-5">
+        <div className="card p-6">
           <RecipeForm initial={initial} loading={saving} onSubmit={handleSubmit} />
         </div>
       )}

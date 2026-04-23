@@ -112,39 +112,43 @@ export default function RecipeDetailPage() {
     <AppShell>
       <Link
         href="/recipes"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 mb-4"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-700 hover:text-ink-900 mb-5"
       >
         <ArrowRight className="h-4 w-4" />
         חזרה לרשימה
       </Link>
 
       <div className="card overflow-hidden mb-6">
-        <div className="aspect-[16/9] bg-slate-800 flex items-center justify-center">
-          {recipe.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={recipe.imageUrl}
-              alt={recipe.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <ChefHat className="h-16 w-16 text-slate-600" />
-          )}
+        <div className="p-3">
+          <div className="aspect-[16/9] bg-gradient-to-br from-surface-200 to-surface-300 rounded-2xl flex items-center justify-center overflow-hidden">
+            {recipe.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={recipe.imageUrl}
+                alt={recipe.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <ChefHat className="h-16 w-16 text-ink-500" />
+            )}
+          </div>
         </div>
 
-        <div className="p-5">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <h1 className="text-2xl font-bold text-slate-100">{recipe.title}</h1>
+        <div className="px-6 py-5">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-ink-900 tracking-tight">
+              {recipe.title}
+            </h1>
             <div className="flex gap-2 shrink-0">
               <Link
                 href={`/recipes/${recipe.id}/edit`}
-                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
+                className="btn-secondary !py-2 !px-4 text-sm"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 ערוך
               </Link>
               <button
-                className="btn-ghost inline-flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300"
+                className="btn-ghost text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
                 onClick={() => setConfirmDelete(true)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -154,15 +158,16 @@ export default function RecipeDetailPage() {
           </div>
 
           {recipe.tags?.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
-              {recipe.tags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="text-xs text-teal-400 bg-teal-500/10 border border-teal-500/30 rounded-full px-2 py-0.5"
-                >
-                  {tag}
-                </span>
-              ))}
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {recipe.tags.map((tag, i) => {
+                const variants = ["tag-brand", "tag-sage", "tag-lavender", "tag"];
+                const cls = variants[i % variants.length];
+                return (
+                  <span key={i} className={cls}>
+                    {tag}
+                  </span>
+                );
+              })}
             </div>
           )}
 
@@ -171,28 +176,31 @@ export default function RecipeDetailPage() {
               href={recipe.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-teal-400"
+              className="inline-flex items-center gap-1.5 text-xs text-ink-700 hover:text-brand-500 transition-colors"
               dir="ltr"
             >
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="h-3.5 w-3.5" />
               {recipe.sourceUrl}
             </a>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="card p-5 md:col-span-1">
-          <h2 className="text-lg font-bold text-slate-100 mb-3">מרכיבים</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <div className="card p-6 md:col-span-1">
+          <h2 className="section-title mb-4">מרכיבים</h2>
           {recipe.ingredients.length === 0 ? (
-            <p className="text-sm text-slate-500">אין מרכיבים</p>
+            <p className="text-sm text-ink-500">אין מרכיבים</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2.5">
               {recipe.ingredients.map((ing, i) => (
-                <li key={i} className="flex justify-between gap-3 text-sm">
-                  <span className="text-slate-200">{ing.name}</span>
+                <li
+                  key={i}
+                  className="flex justify-between gap-3 text-sm py-2 border-b border-surface-200 last:border-0"
+                >
+                  <span className="text-ink-900">{ing.name}</span>
                   {ing.amount && (
-                    <span className="text-slate-400 shrink-0">{ing.amount}</span>
+                    <span className="text-ink-700 shrink-0 font-medium">{ing.amount}</span>
                   )}
                 </li>
               ))}
@@ -200,18 +208,18 @@ export default function RecipeDetailPage() {
           )}
         </div>
 
-        <div className="card p-5 md:col-span-2">
-          <h2 className="text-lg font-bold text-slate-100 mb-3">אופן ההכנה</h2>
+        <div className="card p-6 md:col-span-2">
+          <h2 className="section-title mb-4">אופן ההכנה</h2>
           {recipe.instructions.length === 0 ? (
-            <p className="text-sm text-slate-500">אין הוראות</p>
+            <p className="text-sm text-ink-500">אין הוראות</p>
           ) : (
-            <ol className="space-y-3">
+            <ol className="space-y-4">
               {recipe.instructions.map((step, i) => (
                 <li key={i} className="flex gap-3 text-sm">
-                  <span className="h-6 w-6 shrink-0 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center text-xs font-bold">
+                  <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-white flex items-center justify-center text-xs font-bold shadow-cta">
                     {i + 1}
                   </span>
-                  <p className="text-slate-200 leading-relaxed">{step}</p>
+                  <p className="text-ink-900 leading-relaxed pt-1">{step}</p>
                 </li>
               ))}
             </ol>
@@ -219,9 +227,9 @@ export default function RecipeDetailPage() {
         </div>
       </div>
 
-      <div className="card p-5">
-        <h2 className="text-lg font-bold text-slate-100 mb-3">הערות</h2>
-        <div className="flex gap-2 mb-3">
+      <div className="card p-6">
+        <h2 className="section-title mb-4">הערות</h2>
+        <div className="flex gap-2 mb-4">
           <input
             className="input flex-1"
             value={noteInput}
@@ -235,7 +243,7 @@ export default function RecipeDetailPage() {
             }}
           />
           <button
-            className="btn-primary inline-flex items-center gap-1"
+            className="btn-brand"
             onClick={handleAddNote}
             disabled={addingNote || !noteInput.trim()}
           >
@@ -244,17 +252,17 @@ export default function RecipeDetailPage() {
           </button>
         </div>
         {recipe.notes.length === 0 ? (
-          <p className="text-sm text-slate-500">אין הערות</p>
+          <p className="text-sm text-ink-500">אין הערות</p>
         ) : (
           <ul className="space-y-2">
             {recipe.notes.map((note) => (
               <li
                 key={note.id}
-                className="flex items-start justify-between gap-2 bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2"
+                className="flex items-start justify-between gap-2 bg-surface-100 border border-surface-300/60 rounded-2xl px-4 py-3"
               >
-                <p className="text-sm text-slate-200 flex-1">{note.content}</p>
+                <p className="text-sm text-ink-900 flex-1">{note.content}</p>
                 <button
-                  className="btn-ghost !px-1.5 !py-1 shrink-0 text-slate-400 hover:text-red-400"
+                  className="btn-ghost !px-1.5 !py-1 shrink-0 text-ink-500 hover:text-red-600 hover:bg-red-50"
                   onClick={() => handleDeleteNote(note.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -270,7 +278,7 @@ export default function RecipeDetailPage() {
         onClose={() => setConfirmDelete(false)}
         title="מחיקת מתכון"
       >
-        <p className="text-sm text-slate-300 mb-5">
+        <p className="text-sm text-ink-900 mb-5">
           האם אתה בטוח שברצונך למחוק את המתכון &ldquo;{recipe.title}&rdquo;? לא ניתן לשחזר
           פעולה זו.
         </p>
@@ -282,7 +290,7 @@ export default function RecipeDetailPage() {
             ביטול
           </button>
           <button
-            className="btn-primary !bg-red-500 hover:!bg-red-600"
+            className="btn-danger !bg-red-500 !text-white hover:!bg-red-600 !border-red-500"
             onClick={handleDelete}
           >
             מחק

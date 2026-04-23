@@ -9,7 +9,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  Sparkles,
   BookOpen,
   Plus,
 } from "lucide-react";
@@ -28,28 +27,28 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14">
-            {/* Logo */}
+      <nav className="sticky top-0 z-40 bg-surface-100/80 backdrop-blur-md border-b border-surface-300/60">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Brand */}
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="h-8 w-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center group-hover:border-teal-500/60 transition-colors">
-                <Sparkles className="h-4 w-4 text-teal-400" />
+              <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-300 shadow-cta flex items-center justify-center text-white font-bold text-sm">
+                מ
               </div>
-              <span className="font-mono font-bold text-slate-100 text-sm hidden sm:block">
+              <span className="font-semibold text-ink-900 text-base hidden sm:block tracking-tight">
                 מתכונים
               </span>
             </Link>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-1 bg-white/60 p-1 rounded-full shadow-soft border border-surface-300/50">
               {navItems.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all duration-150 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium text-ink-700 hover:text-ink-900 hover:bg-white transition-all duration-150"
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" />
                   {label}
                 </Link>
               ))}
@@ -60,53 +59,53 @@ export function Navbar() {
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white transition-colors cursor-pointer"
                   aria-label="User menu"
                 >
                   {user?.photoURL ? (
                     <Image
                       src={user.photoURL}
                       alt={user.displayName || "User"}
-                      width={28}
-                      height={28}
-                      className="rounded-full border border-slate-700"
+                      width={32}
+                      height={32}
+                      className="rounded-full border-2 border-white shadow-soft"
                     />
                   ) : (
-                    <div className="h-7 w-7 rounded-full bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400 text-xs font-bold">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-sage-500 to-sage-300 flex items-center justify-center text-white text-xs font-bold shadow-soft">
                       {user?.displayName?.[0] || "U"}
                     </div>
                   )}
-                  <span className="text-xs text-slate-400 hidden sm:block max-w-24 truncate">
+                  <span className="text-sm font-medium text-ink-700 hidden sm:block max-w-24 truncate">
                     {user?.displayName?.split(" ")[0] || "User"}
                   </span>
-                  <ChevronDown className="h-3 w-3 text-slate-500" />
+                  <ChevronDown className="h-3.5 w-3.5 text-ink-500" />
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-50 animate-fade-in">
-                    <div className="px-3 py-2 border-b border-slate-800">
-                      <p className="text-xs font-medium text-slate-300 truncate">
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-hover py-2 z-50 animate-fade-in border border-surface-300/60">
+                    <div className="px-4 py-2.5 border-b border-surface-300">
+                      <p className="text-sm font-semibold text-ink-900 truncate">
                         {user?.displayName}
                       </p>
-                      <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                      <p className="text-xs text-ink-500 truncate">{user?.email}</p>
                     </div>
                     <Link
                       href="/settings"
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink-700 hover:text-ink-900 hover:bg-surface-200 transition-colors cursor-pointer"
                       onClick={() => setUserMenuOpen(false)}
                     >
-                      <Settings className="h-3.5 w-3.5" />
+                      <Settings className="h-4 w-4" />
                       Settings
                     </Link>
                     <button
                       onClick={() => { signOut(); setUserMenuOpen(false); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                     >
-                      <LogOut className="h-3.5 w-3.5" />
+                      <LogOut className="h-4 w-4" />
                       Sign out
                     </button>
-                    <div className="border-t border-slate-800 px-3 py-1.5">
-                      <p className="text-[10px] text-slate-600 font-mono">v{APP_VERSION}</p>
+                    <div className="border-t border-surface-300 px-4 pt-2 mt-1">
+                      <p className="text-[10px] text-ink-500 tracking-wide">v{APP_VERSION}</p>
                     </div>
                   </div>
                 )}
@@ -116,10 +115,10 @@ export function Navbar() {
               {navItems.length > 0 && (
                 <button
                   onClick={() => setMobileOpen(!mobileOpen)}
-                  className="md:hidden p-2 rounded-lg hover:bg-slate-800 text-slate-400 cursor-pointer transition-colors"
+                  className="md:hidden p-2 rounded-full hover:bg-white text-ink-700 cursor-pointer transition-colors"
                   aria-label="Toggle mobile menu"
                 >
-                  {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                  {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                 </button>
               )}
             </div>
@@ -128,14 +127,14 @@ export function Navbar() {
 
         {/* Mobile nav */}
         {mobileOpen && navItems.length > 0 && (
-          <div className="md:hidden border-t border-slate-800 bg-slate-950 px-4 py-3">
-            <div className="grid grid-cols-2 gap-1">
+          <div className="md:hidden border-t border-surface-300/60 bg-white/80 backdrop-blur-md px-4 py-3">
+            <div className="flex flex-col gap-1">
               {navItems.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all cursor-pointer"
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-medium text-ink-700 hover:text-ink-900 hover:bg-surface-200 transition-all cursor-pointer"
                 >
                   <Icon className="h-4 w-4" />
                   {label}

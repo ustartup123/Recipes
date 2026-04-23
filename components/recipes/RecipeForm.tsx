@@ -85,7 +85,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div>
         <label className="input-label">שם המתכון</label>
         <input
@@ -110,7 +110,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
           />
           <button
             type="button"
-            className="btn-secondary inline-flex items-center gap-1.5 text-sm whitespace-nowrap"
+            className="btn-secondary whitespace-nowrap"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
           >
@@ -134,7 +134,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
           <img
             src={imageUrl}
             alt="תצוגה מקדימה"
-            className="mt-2 h-32 rounded-lg object-cover border border-slate-700"
+            className="mt-3 h-32 rounded-2xl object-cover border border-surface-300"
           />
         )}
       </div>
@@ -173,7 +173,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
         </div>
         <button
           type="button"
-          className="btn-secondary mt-2 text-xs inline-flex items-center gap-1"
+          className="btn-secondary mt-3 !px-4 !py-2 text-xs"
           onClick={() =>
             setIngredients([...ingredients, { name: "", amount: "" }])
           }
@@ -184,17 +184,17 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
 
       <div>
         <label className="input-label">אופן ההכנה</label>
-        <p className="text-xs text-slate-500 mb-2">
+        <p className="text-xs text-ink-500 mb-2">
           חשוב לכלול את כמויות המרכיבים בתוך ההוראות
         </p>
         <div className="space-y-2">
           {instructions.map((inst, i) => (
             <div key={i} className="flex gap-2 items-start">
-              <span className="h-7 w-7 shrink-0 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center text-xs font-bold mt-1">
+              <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-white flex items-center justify-center text-xs font-bold mt-1 shadow-cta">
                 {i + 1}
               </span>
               <textarea
-                className="input flex-1 min-h-[60px]"
+                className="input flex-1 min-h-[70px]"
                 value={inst}
                 onChange={(e) =>
                   setInstructions(
@@ -221,7 +221,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
         </div>
         <button
           type="button"
-          className="btn-secondary mt-2 text-xs inline-flex items-center gap-1"
+          className="btn-secondary mt-3 !px-4 !py-2 text-xs"
           onClick={() => setInstructions([...instructions, ""])}
         >
           <Plus className="h-3.5 w-3.5" /> הוסף שלב
@@ -230,11 +230,11 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
 
       <div>
         <label className="input-label">תגיות</label>
-        <div className="flex flex-wrap items-center gap-2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 focus-within:border-teal-500">
+        <div className="flex flex-wrap items-center gap-2 bg-white border border-surface-300 rounded-2xl px-3 py-2.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           {tags.map((tag, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 text-xs text-teal-400 bg-teal-500/10 border border-teal-500/30 rounded-full px-2 py-0.5 cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-peach-700 bg-peach-300 border border-peach-200 rounded-full px-2.5 py-0.5 cursor-pointer hover:bg-peach-200"
               onClick={() => setTags(tags.filter((t) => t !== tag))}
             >
               {tag}
@@ -242,7 +242,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
             </span>
           ))}
           <input
-            className="bg-transparent outline-none text-sm text-slate-100 flex-1 min-w-[120px]"
+            className="bg-transparent outline-none text-sm text-ink-900 flex-1 min-w-[120px]"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={addTag}
@@ -253,7 +253,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
 
       <button
         type="submit"
-        className="btn-primary w-full py-3 text-base"
+        className="btn-brand w-full !py-3.5 text-base"
         disabled={loading}
       >
         {loading ? "שומר..." : "שמור מתכון"}

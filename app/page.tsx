@@ -15,7 +15,7 @@ export default function Home() {
   }, [user, loading, router]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-950">
+    <div className="flex items-center justify-center min-h-screen bg-surface-100">
       <LoadingSpinner className="h-8 w-8" />
     </div>
   );

@@ -10,23 +10,58 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        aqua: {
-          50:  "#f0fdfa",
-          100: "#ccfbf1",
-          200: "#99f6e4",
-          300: "#5eead4",
-          400: "#2dd4bf",
-          500: "#14b8a6",
-          600: "#0d9488",
-          700: "#0f766e",
-          800: "#115e59",
-          900: "#134e4a",
+        // Blush-based surfaces
+        surface: {
+          50:  "#ffffff",
+          100: "#faf6f3", // blush (body bg)
+          200: "#f0e9e2", // deep blush
+          300: "#e8dfd6", // rule / hairline
+        },
+        // Warm orange primary
+        brand: {
+          300: "#f0a46a",
+          400: "#ec8c48",
+          500: "#e07a33",
+          600: "#c86825",
+          700: "#a05618",
+        },
+        // Sage secondary
+        sage: {
+          100: "#eef2eb",
+          200: "#dfe7db",
+          300: "#c6d3c0",
+          500: "#8fa78c",
+          600: "#718d6e",
+          700: "#55705a",
+        },
+        // Accent tag colors
+        peach: {
+          200: "#ffe3cc",
+          300: "#ffd6b5",
+          700: "#8a4a18",
+        },
+        lavender: {
+          200: "#e5dff5",
+          300: "#d9d0f0",
+          700: "#4b3d82",
+        },
+        // Navy ink
+        ink: {
+          900: "#1a2332",
+          800: "#2a3545",
+          700: "#5a6472",
+          500: "#9aa4b2",
+          400: "#b6bec8",
+          300: "#d3d8df",
         },
       },
       fontFamily: {
-        heading: ["var(--font-fira-code)", "monospace"],
-        body: ["var(--font-fira-sans)", "sans-serif"],
-        mono: ["var(--font-fira-code)", "monospace"],
+        heading: ["var(--font-rubik)", "var(--font-dm-sans)", "system-ui", "sans-serif"],
+        body: ["var(--font-rubik)", "system-ui", "sans-serif"],
+        display: ["var(--font-dm-sans)", "var(--font-rubik)", "system-ui", "sans-serif"],
+      },
+      borderRadius: {
+        "4xl": "2rem",
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
@@ -44,10 +79,10 @@ const config: Config = {
         },
       },
       boxShadow: {
-        glow: "0 0 20px rgba(20, 184, 166, 0.3)",
-        "glow-sm": "0 0 10px rgba(20, 184, 166, 0.2)",
-        "glow-danger": "0 0 15px rgba(239, 68, 68, 0.3)",
-        "glow-warning": "0 0 15px rgba(234, 179, 8, 0.3)",
+        soft: "0 1px 0 rgba(26, 35, 50, 0.04)",
+        pop: "0 14px 40px -18px rgba(26, 35, 50, 0.25)",
+        hover: "0 20px 50px -20px rgba(26, 35, 50, 0.35)",
+        cta: "0 4px 14px -4px rgba(224, 122, 51, 0.45)",
       },
     },
   },

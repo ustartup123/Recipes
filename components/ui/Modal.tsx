@@ -35,13 +35,13 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink-900/30 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         className={cn(
-          "relative w-full bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl",
+          "relative w-full bg-white rounded-3xl shadow-hover",
           "animate-[slideUp_0.2s_ease-out]",
           sizeClass
         )}
@@ -49,13 +49,13 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
         aria-modal="true"
         aria-labelledby="modal-title"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <h2 id="modal-title" className="text-base font-bold font-mono text-slate-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-300">
+          <h2 id="modal-title" className="text-base font-bold text-ink-900">
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="p-1.5 rounded-full hover:bg-surface-200 text-ink-700 hover:text-ink-900 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="h-4 w-4" />

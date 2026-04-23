@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { Sparkles, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 
 export default function LoginPage() {
   const { user, loading, signInWithGoogle, signInAsDev } = useAuth();
@@ -36,37 +36,46 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-screen bg-surface-100">
         <LoadingSpinner className="h-8 w-8" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-surface-100 flex items-center justify-center p-6">
+      {/* Soft decorative gradients */}
+      <div
+        className="fixed inset-0 -z-10 overflow-hidden pointer-events-none"
+        aria-hidden="true"
+      >
+        <div className="absolute top-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-peach-300/60 blur-3xl" />
+        <div className="absolute bottom-[-20%] left-[-10%] h-[420px] w-[420px] rounded-full bg-sage-200/70 blur-3xl" />
+      </div>
+
       <div className="w-full max-w-sm">
-        <div className="card p-8 shadow-2xl">
-          <div className="text-center mb-8">
-            <div className="inline-flex h-12 w-12 rounded-xl bg-teal-500/10 border border-teal-500/30 items-center justify-center mb-4">
-              <Sparkles className="h-6 w-6 text-teal-400" />
+        <div className="card p-8">
+          <div className="text-center mb-7">
+            <div className="inline-flex h-14 w-14 rounded-3xl bg-gradient-to-br from-brand-500 to-brand-300 items-center justify-center mb-5 shadow-cta text-white font-bold text-xl">
+              מ
             </div>
-            <h3 className="text-xl font-bold font-mono text-slate-100 mb-2">
-              Sign in
-            </h3>
-            <p className="text-sm text-slate-500">
-              Use your Google account to continue
+            <h1 className="text-2xl font-bold text-ink-900 mb-1.5 tracking-tight">
+              ברוך הבא למתכונים
+            </h1>
+            <p className="text-sm text-ink-700">
+              הספרייה הפרטית שלך לכל מה שבישלת אי-פעם
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            <div className="mb-4 p-3 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm">
               {error}
             </div>
           )}
 
           <button
             onClick={handleSignIn}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-800 font-semibold rounded-xl px-6 py-3.5 transition-all duration-150 cursor-pointer shadow-sm border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-surface-200 text-ink-900 font-semibold rounded-full px-6 py-3.5 transition-all duration-150 cursor-pointer shadow-soft border border-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -92,7 +101,7 @@ export default function LoginPage() {
           {isDev && (
             <button
               onClick={handleDevSignIn}
-              className="w-full mt-3 flex items-center justify-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono text-sm rounded-xl px-6 py-3 transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="w-full mt-3 flex items-center justify-center gap-2 bg-sage-200 hover:bg-sage-300 text-sage-700 border border-sage-300 text-sm font-semibold rounded-full px-6 py-3 transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sage-500/40"
             >
               <Wrench className="h-4 w-4" />
               Dev Sign In (test user)
