@@ -6,7 +6,11 @@ import {
   GeminiError,
   classifyGeminiError,
 } from "@/lib/gemini";
-import { fetchUrl, extractRecipeContent } from "@/lib/ai/fetch-and-extract";
+import {
+  fetchUrl,
+  extractRecipeContent,
+  enrichYouTubeContent,
+} from "@/lib/ai/fetch-and-extract";
 import { urlPrompt, extractJson } from "@/lib/ai/prompts";
 import logger, {
   elapsedMs,
@@ -71,7 +75,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const extracted = extractRecipeContent(html, url, userLog);
+    let extracted = extractRecipeContent(html, url, userLog);
+    extracted = await enrichYouTubeContent(extracted, url, userLog);
     if (extracted.content.length < 50) {
       userLog.warn(
         { host, contentLength: extracted.content.length },

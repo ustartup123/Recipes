@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { extractRecipeContent, fetchUrl } from "@/lib/ai/fetch-and-extract";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  extractRecipeContent,
+  fetchUrl,
+  extractYouTubeVideoId,
+  fetchYouTubeInnertube,
+  enrichYouTubeContent,
+} from "@/lib/ai/fetch-and-extract";
 
 const BASE_URL = "https://example.com/recipe";
 
@@ -200,5 +206,200 @@ describe("extractRecipeContent", () => {
 describe("fetchUrl", () => {
   it("rejects invalid URLs before making a request", async () => {
     await expect(fetchUrl("not a url")).rejects.toThrow(/Invalid URL/);
+  });
+
+  it("attaches CONSENT/SOCS cookies when fetching a YouTube host", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("<html><body>ok</body></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+    await fetchUrl("https://youtu.be/r9vcFj0I0LE");
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    const cookie = (init.headers as Record<string, string>)["Cookie"];
+    expect(cookie).toContain("CONSENT=YES");
+    expect(cookie).toContain("SOCS=");
+    fetchSpy.mockRestore();
+  });
+
+  it("does NOT attach the YouTube consent cookie for other hosts", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("<html></html>", { status: 200 }),
+    );
+    await fetchUrl("https://example.com/recipe");
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Cookie"]).toBeUndefined();
+    fetchSpy.mockRestore();
+  });
+});
+
+describe("extractYouTubeVideoId", () => {
+  it("parses youtu.be short links", () => {
+    expect(extractYouTubeVideoId("https://youtu.be/r9vcFj0I0LE")).toBe(
+      "r9vcFj0I0LE",
+    );
+    expect(
+      extractYouTubeVideoId("https://youtu.be/r9vcFj0I0LE?si=foobar"),
+    ).toBe("r9vcFj0I0LE");
+  });
+  it("parses watch URLs", () => {
+    expect(
+      extractYouTubeVideoId("https://www.youtube.com/watch?v=r9vcFj0I0LE&t=10"),
+    ).toBe("r9vcFj0I0LE");
+  });
+  it("parses embed and shorts URLs", () => {
+    expect(
+      extractYouTubeVideoId("https://www.youtube.com/embed/r9vcFj0I0LE"),
+    ).toBe("r9vcFj0I0LE");
+    expect(
+      extractYouTubeVideoId("https://www.youtube.com/shorts/r9vcFj0I0LE"),
+    ).toBe("r9vcFj0I0LE");
+  });
+  it("returns null for non-YouTube or malformed URLs", () => {
+    expect(extractYouTubeVideoId("https://example.com/abc")).toBeNull();
+    expect(extractYouTubeVideoId("not a url")).toBeNull();
+    expect(extractYouTubeVideoId("https://youtu.be/")).toBeNull();
+  });
+});
+
+describe("fetchYouTubeInnertube", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns parsed videoDetails on a 200 response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          videoDetails: {
+            title: "Crème Brûlée",
+            shortDescription: "x".repeat(500),
+            thumbnail: {
+              thumbnails: [
+                { url: "https://i.ytimg.com/vi/abc/default.jpg", width: 120 },
+                { url: "https://i.ytimg.com/vi/abc/maxres.jpg", width: 1280 },
+              ],
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const out = await fetchYouTubeInnertube("abc12345678");
+    expect(out).not.toBeNull();
+    expect(out!.title).toBe("Crème Brûlée");
+    expect(out!.shortDescription.length).toBe(500);
+    expect(out!.thumbnailUrl).toBe("https://i.ytimg.com/vi/abc/maxres.jpg");
+  });
+
+  it("returns null when InnerTube responds non-OK", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("forbidden", { status: 403 }),
+    );
+    expect(await fetchYouTubeInnertube("abc")).toBeNull();
+  });
+
+  it("returns null when shortDescription is missing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ videoDetails: { title: "x" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await fetchYouTubeInnertube("abc")).toBeNull();
+  });
+});
+
+describe("enrichYouTubeContent", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function makeExtracted(overrides: Partial<{
+    content: string;
+    pageTitle: string;
+    imageUrl: string | null;
+  }> = {}) {
+    return {
+      content: "",
+      pageTitle: "",
+      metaDescription: "",
+      imageUrl: null,
+      hasStructuredData: false,
+      ...overrides,
+    };
+  }
+
+  it("is a no-op for non-YouTube URLs", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const input = makeExtracted({ content: "" });
+    const out = await enrichYouTubeContent(
+      input,
+      "https://example.com/recipe",
+    );
+    expect(out).toBe(input);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when YouTube extraction already returned a substantial description", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const big = "=== YOUTUBE VIDEO DESCRIPTION ===\n" + "x".repeat(2000);
+    const out = await enrichYouTubeContent(
+      makeExtracted({ content: big }),
+      "https://youtu.be/r9vcFj0I0LE",
+    );
+    expect(out.content).toBe(big);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls InnerTube when extraction yields og-fallback (truncated marker)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          videoDetails: {
+            title: "קרם ברולה",
+            shortDescription: "מצרכים: 6 חלמונים, שמנת. הכנה: לאפות 35 דקות.".repeat(20),
+            thumbnail: {
+              thumbnails: [
+                {
+                  url: "https://i.ytimg.com/vi/abc/maxresdefault.jpg",
+                  width: 1280,
+                },
+              ],
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const input = makeExtracted({
+      content: "=== YOUTUBE VIDEO DESCRIPTION (truncated) ===\nshort blurb",
+      pageTitle: "",
+      imageUrl: null,
+    });
+    const out = await enrichYouTubeContent(
+      input,
+      "https://youtu.be/r9vcFj0I0LE",
+    );
+    expect(out.content).toContain("YOUTUBE VIDEO DESCRIPTION (innertube)");
+    expect(out.content).toContain("6 חלמונים");
+    expect(out.content).not.toContain("(truncated)");
+    expect(out.pageTitle).toBe("קרם ברולה");
+    expect(out.imageUrl).toBe(
+      "https://i.ytimg.com/vi/abc/maxresdefault.jpg",
+    );
+  });
+
+  it("falls through gracefully if InnerTube is unreachable", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("nope", { status: 500 }),
+    );
+    const input = makeExtracted({
+      content: "=== YOUTUBE VIDEO DESCRIPTION (truncated) ===\nshort",
+    });
+    const out = await enrichYouTubeContent(
+      input,
+      "https://youtu.be/r9vcFj0I0LE",
+    );
+    // Original content preserved, no enrichment block
+    expect(out.content).toBe(input.content);
   });
 });

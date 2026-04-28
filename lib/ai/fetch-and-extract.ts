@@ -28,6 +28,27 @@ function isYouTubeHost(host: string): boolean {
   return /(^|\.)(youtube\.com|youtu\.be)$/i.test(host);
 }
 
+/** Pull an 11-char video ID from any common YouTube URL shape. */
+export function extractYouTubeVideoId(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    const host = u.host.toLowerCase();
+    if (host === "youtu.be" || host.endsWith(".youtu.be")) {
+      const id = u.pathname.replace(/^\/+/, "").split("/")[0];
+      return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+    if (/(^|\.)youtube\.com$/.test(host)) {
+      const v = u.searchParams.get("v");
+      if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+      const m = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * YouTube watch pages are JS-rendered, so the visible body text is empty
  * after script removal. The recipe text (description) is embedded in
@@ -96,6 +117,12 @@ export async function fetchUrl(
   };
 
   const host = hostOf(url);
+  // YouTube serves an EU-consent / bot-check shell (no ytInitialPlayerResponse)
+  // to data-center IPs. Pre-set the consent cookies so we get the real watch
+  // page on first try; the server-side InnerTube fallback handles the rest.
+  if (isYouTubeHost(host)) {
+    headers["Cookie"] = "CONSENT=YES+1; SOCS=CAI; PREF=hl=he&gl=IL";
+  }
   const start = startTimer();
   log.info({ host }, "fetchUrl: start");
 
@@ -156,6 +183,153 @@ export interface ExtractedContent {
   metaDescription: string;
   imageUrl: string | null;
   hasStructuredData: boolean;
+}
+
+interface InnertubePlayerData {
+  shortDescription: string;
+  title: string;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Hit YouTube's InnerTube `player` API directly — same endpoint the watch
+ * page uses internally to populate `ytInitialPlayerResponse`. This bypasses
+ * the EU-consent shell and most cloud-IP bot heuristics that hit Vercel
+ * functions. No auth required.
+ */
+export async function fetchYouTubeInnertube(
+  videoId: string,
+  log: LogLike = NOOP_LOG,
+): Promise<InnertubePlayerData | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const start = startTimer();
+  try {
+    const body = {
+      context: {
+        client: {
+          clientName: "WEB",
+          clientVersion: "2.20240814.00.00",
+          hl: "he",
+          gl: "IL",
+        },
+      },
+      videoId,
+    };
+    const res = await fetch(
+      "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
+          Origin: "https://www.youtube.com",
+          Referer: `https://www.youtube.com/watch?v=${videoId}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      },
+    );
+    clearTimeout(timeout);
+    if (!res.ok) {
+      log.warn(
+        { videoId, status: res.status, durationMs: elapsedMs(start) },
+        "innertube: non-OK response",
+      );
+      return null;
+    }
+    const data = (await res.json()) as {
+      videoDetails?: {
+        shortDescription?: string;
+        title?: string;
+        thumbnail?: { thumbnails?: Array<{ url: string; width?: number }> };
+      };
+    };
+    const desc = data?.videoDetails?.shortDescription;
+    const title = data?.videoDetails?.title;
+    if (!desc || desc.trim().length === 0) {
+      log.warn(
+        { videoId, hasTitle: !!title, durationMs: elapsedMs(start) },
+        "innertube: no shortDescription in response",
+      );
+      return null;
+    }
+    const thumbs = data.videoDetails?.thumbnail?.thumbnails ?? [];
+    const best = thumbs.reduce<{ url: string; width: number } | null>(
+      (acc, t) =>
+        !acc || (t.width ?? 0) > acc.width
+          ? { url: t.url, width: t.width ?? 0 }
+          : acc,
+      null,
+    );
+    log.info(
+      { videoId, descChars: desc.length, durationMs: elapsedMs(start) },
+      "innertube: ok",
+    );
+    return {
+      shortDescription: desc,
+      title: title ?? "",
+      thumbnailUrl: best?.url ?? null,
+    };
+  } catch (error) {
+    clearTimeout(timeout);
+    log.warn(
+      { videoId, durationMs: elapsedMs(start), err: serializeError(error) },
+      "innertube: request failed",
+    );
+    return null;
+  }
+}
+
+/**
+ * If the URL is a YouTube watch page and the HTML extraction did not yield
+ * a usable description (the bot-check / consent shell case), augment the
+ * extracted content via the InnerTube `player` API.
+ */
+export async function enrichYouTubeContent(
+  extracted: ExtractedContent,
+  url: string,
+  log: LogLike = NOOP_LOG,
+): Promise<ExtractedContent> {
+  const host = hostOf(url);
+  if (!isYouTubeHost(host)) return extracted;
+  // Heuristic: real watch-page extraction yields >1KB even for short videos
+  // (description block is the bulk). Anything below that smells like the
+  // og-fallback / bot shell, so try InnerTube.
+  const looksThin =
+    extracted.content.length < 1000 ||
+    !extracted.content.includes("YOUTUBE VIDEO DESCRIPTION") ||
+    extracted.content.includes(
+      "=== YOUTUBE VIDEO DESCRIPTION (truncated) ===",
+    );
+  if (!looksThin) return extracted;
+  const videoId = extractYouTubeVideoId(url);
+  if (!videoId) {
+    log.warn({ url }, "youtube-enrich: could not extract videoId");
+    return extracted;
+  }
+  log.info(
+    { videoId, contentLength: extracted.content.length },
+    "youtube-enrich: fetching InnerTube fallback",
+  );
+  const player = await fetchYouTubeInnertube(videoId, log);
+  if (!player) return extracted;
+  const block =
+    "=== YOUTUBE VIDEO DESCRIPTION (innertube) ===\n" +
+    player.shortDescription.substring(0, 15000);
+  // Drop any prior thin YT description block so we do not stack them.
+  const existing = extracted.content
+    .split(/\n\n(?==== )/)
+    .filter((part) => !part.startsWith("=== YOUTUBE VIDEO DESCRIPTION"));
+  const merged = [block, ...existing].join("\n\n").substring(0, 25000);
+  return {
+    ...extracted,
+    content: merged,
+    pageTitle: extracted.pageTitle || player.title,
+    imageUrl: extracted.imageUrl || player.thumbnailUrl,
+  };
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
