@@ -172,12 +172,28 @@ describe("extractRecipeContent", () => {
     expect(out.content).not.toContain("leaked content");
   });
 
-  it("falls back gracefully when YouTube has no parseable player response", () => {
-    const html = `<html><head><title>broken</title></head><body></body></html>`;
+  it("falls back to og:description when YouTube has no parseable player response", () => {
+    // No ytInitialPlayerResponse, but og:description is present (the
+    // truncated version YouTube always emits in meta tags).
+    const html = `<html><head>
+      <title>broken</title>
+      <meta property="og:description" content="פרטים על המתכון, מצרכים והוראות הכנה">
+    </head><body></body></html>`;
     const out = extractRecipeContent(html, "https://youtu.be/abc");
-    expect(out.content).not.toContain("YOUTUBE VIDEO DESCRIPTION");
-    // No throw; just returns whatever the regular pipeline found.
-    expect(out.pageTitle).toBe("broken");
+    expect(out.content).toContain("YOUTUBE VIDEO DESCRIPTION");
+    expect(out.content).toContain("מצרכים");
+    expect(out.content.length).toBeGreaterThan(50);
+  });
+
+  it("uses the loose shortDescription regex when ytInitialPlayerResponse blob is malformed", () => {
+    // shortDescription appears in some other inline JS object, not inside
+    // ytInitialPlayerResponse — e.g. trimmed-down mobile HTML.
+    const html = `<html><head></head><body>
+      <script>window.something = {"videoId":"x","shortDescription":"מתכון לקרם ברולה עם 6 חלמונים ושמנת. אופן הכנה: לערבב ולאפות.","other":1};</script>
+    </body></html>`;
+    const out = extractRecipeContent(html, "https://youtu.be/abc");
+    expect(out.content).toContain("YOUTUBE VIDEO DESCRIPTION");
+    expect(out.content).toContain("6 חלמונים");
   });
 });
 

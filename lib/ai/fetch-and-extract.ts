@@ -34,20 +34,42 @@ function isYouTubeHost(host: string): boolean {
  * `var ytInitialPlayerResponse = {...};` — pull it out before cheerio
  * strips the script tags.
  */
-function extractYouTubeDescription(html: string): string | null {
-  const match = html.match(
-    /var ytInitialPlayerResponse\s*=\s*({[\s\S]+?})\s*;\s*(?:var |<\/script>)/,
+function extractYouTubeDescription(
+  html: string,
+): { source: string; text: string } | null {
+  // Strategy A: ytInitialPlayerResponse — full description (3-5KB typical).
+  const playerMatch = html.match(
+    /ytInitialPlayerResponse\s*=\s*({[\s\S]+?})\s*;\s*(?:var |<\/script>|window\.)/,
   );
-  if (!match) return null;
-  try {
-    const data = JSON.parse(match[1]) as {
-      videoDetails?: { shortDescription?: string; title?: string };
-    };
-    const desc = data?.videoDetails?.shortDescription;
-    return typeof desc === "string" && desc.trim().length > 0 ? desc : null;
-  } catch {
-    return null;
+  if (playerMatch) {
+    try {
+      const data = JSON.parse(playerMatch[1]) as {
+        videoDetails?: { shortDescription?: string };
+      };
+      const desc = data?.videoDetails?.shortDescription;
+      if (typeof desc === "string" && desc.trim().length > 0) {
+        return { source: "ytInitialPlayerResponse", text: desc };
+      }
+    } catch {
+      /* fall through */
+    }
   }
+
+  // Strategy B: a looser scan for "shortDescription":"..." anywhere in inline JS.
+  // Robust to layout changes that move the field outside ytInitialPlayerResponse.
+  const looseMatch = html.match(/"shortDescription"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (looseMatch) {
+    try {
+      const decoded = JSON.parse(`"${looseMatch[1]}"`) as string;
+      if (decoded.trim().length > 0) {
+        return { source: "shortDescription-regex", text: decoded };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return null;
 }
 
 export async function fetchUrl(
@@ -196,14 +218,29 @@ export function extractRecipeContent(
 
   // === YouTube video description ===
   // Recipe channels put the full recipe in the video description. Pull it
-  // from ytInitialPlayerResponse before the script-stripping cleanup below.
+  // from inline JS before the script-stripping cleanup below. Falls back
+  // to og:description so we always pass the 50-char content gate even if
+  // YouTube changes its inline layout.
   if (isYouTubeHost(hostOf(url))) {
-    const ytDesc = extractYouTubeDescription(html);
-    if (ytDesc) {
-      strategiesUsed.push("youtube-description");
+    const yt = extractYouTubeDescription(html);
+    if (yt) {
+      strategiesUsed.push(`youtube-description:${yt.source}`);
       contentParts.push(
-        "=== YOUTUBE VIDEO DESCRIPTION ===\n" + ytDesc.substring(0, 15000),
+        "=== YOUTUBE VIDEO DESCRIPTION ===\n" + yt.text.substring(0, 15000),
       );
+    } else {
+      const ogDesc =
+        $('meta[property="og:description"]').attr("content")?.trim() ||
+        $('meta[name="description"]').attr("content")?.trim() ||
+        "";
+      if (ogDesc.length > 0) {
+        strategiesUsed.push("youtube-description:og-fallback");
+        contentParts.push(
+          "=== YOUTUBE VIDEO DESCRIPTION (truncated) ===\n" + ogDesc,
+        );
+      } else {
+        strategiesUsed.push("youtube-description:none");
+      }
     }
   }
 
