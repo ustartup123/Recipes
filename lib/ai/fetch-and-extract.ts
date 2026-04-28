@@ -24,6 +24,32 @@ function hostOf(url: string): string {
   }
 }
 
+function isYouTubeHost(host: string): boolean {
+  return /(^|\.)(youtube\.com|youtu\.be)$/i.test(host);
+}
+
+/**
+ * YouTube watch pages are JS-rendered, so the visible body text is empty
+ * after script removal. The recipe text (description) is embedded in
+ * `var ytInitialPlayerResponse = {...};` — pull it out before cheerio
+ * strips the script tags.
+ */
+function extractYouTubeDescription(html: string): string | null {
+  const match = html.match(
+    /var ytInitialPlayerResponse\s*=\s*({[\s\S]+?})\s*;\s*(?:var |<\/script>)/,
+  );
+  if (!match) return null;
+  try {
+    const data = JSON.parse(match[1]) as {
+      videoDetails?: { shortDescription?: string; title?: string };
+    };
+    const desc = data?.videoDetails?.shortDescription;
+    return typeof desc === "string" && desc.trim().length > 0 ? desc : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchUrl(
   rawUrl: string,
   log: LogLike = NOOP_LOG,
@@ -166,6 +192,19 @@ export function extractRecipeContent(
       "=== STRUCTURED RECIPE DATA (JSON-LD) ===\n" +
         JSON.stringify(recipeSchema, null, 2),
     );
+  }
+
+  // === YouTube video description ===
+  // Recipe channels put the full recipe in the video description. Pull it
+  // from ytInitialPlayerResponse before the script-stripping cleanup below.
+  if (isYouTubeHost(hostOf(url))) {
+    const ytDesc = extractYouTubeDescription(html);
+    if (ytDesc) {
+      strategiesUsed.push("youtube-description");
+      contentParts.push(
+        "=== YOUTUBE VIDEO DESCRIPTION ===\n" + ytDesc.substring(0, 15000),
+      );
+    }
   }
 
   // === Strategy 2: WordPress Recipe Maker ===

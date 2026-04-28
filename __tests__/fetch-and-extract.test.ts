@@ -115,6 +115,70 @@ describe("extractRecipeContent", () => {
     expect(out.hasStructuredData).toBe(false);
     expect(out.imageUrl).toBeNull();
   });
+
+  it("extracts the description from a YouTube watch page", () => {
+    // Minimal mock of YouTube's HTML: shell + ytInitialPlayerResponse blob.
+    // Real pages embed videoDetails inside a much larger object, but the
+    // extractor only needs videoDetails.shortDescription.
+    const desc =
+      "מתכון לקרם ברולה. מצרכים: 6 חלמונים, 2 כוסות שמנת, חצי כוס סוכר. " +
+      "אופן הכנה: לחמם תנור ל-150 מעלות, לערבב, לאפות 35 דקות.";
+    const playerResponse = {
+      videoDetails: {
+        title: "קרם ברולה",
+        shortDescription: desc,
+      },
+    };
+    const html = `<!doctype html><html><head>
+      <title>קרם ברולה - YouTube</title>
+      <meta name="description" content="short og blurb">
+      <meta property="og:image" content="https://i.ytimg.com/vi/abc/maxresdefault.jpg">
+    </head><body>
+      <script>var ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};var x = 1;</script>
+    </body></html>`;
+    const out = extractRecipeContent(html, "https://youtu.be/abc");
+    expect(out.content).toContain("YOUTUBE VIDEO DESCRIPTION");
+    expect(out.content).toContain("6 חלמונים");
+    expect(out.content).toContain("לאפות 35 דקות");
+    expect(out.content.length).toBeGreaterThan(50);
+    expect(out.imageUrl).toBe("https://i.ytimg.com/vi/abc/maxresdefault.jpg");
+  });
+
+  it("handles youtube.com/watch URLs the same as youtu.be", () => {
+    const playerResponse = {
+      videoDetails: { shortDescription: "x".repeat(300) },
+    };
+    const html = `<html><head></head><body>
+      <script>var ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};</script>
+    </body></html>`;
+    const out = extractRecipeContent(
+      html,
+      "https://www.youtube.com/watch?v=abc",
+    );
+    expect(out.content).toContain("YOUTUBE VIDEO DESCRIPTION");
+    expect(out.content.length).toBeGreaterThan(200);
+  });
+
+  it("does not pull ytInitialPlayerResponse for non-YouTube URLs", () => {
+    // Same script blob, but on a non-YouTube host — should be ignored.
+    const playerResponse = {
+      videoDetails: { shortDescription: "leaked content" },
+    };
+    const html = `<html><body>
+      <script>var ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};</script>
+    </body></html>`;
+    const out = extractRecipeContent(html, "https://example.com/recipe");
+    expect(out.content).not.toContain("YOUTUBE VIDEO DESCRIPTION");
+    expect(out.content).not.toContain("leaked content");
+  });
+
+  it("falls back gracefully when YouTube has no parseable player response", () => {
+    const html = `<html><head><title>broken</title></head><body></body></html>`;
+    const out = extractRecipeContent(html, "https://youtu.be/abc");
+    expect(out.content).not.toContain("YOUTUBE VIDEO DESCRIPTION");
+    // No throw; just returns whatever the regular pipeline found.
+    expect(out.pageTitle).toBe("broken");
+  });
 });
 
 describe("fetchUrl", () => {
