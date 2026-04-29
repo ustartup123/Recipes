@@ -62,7 +62,7 @@ export default function RecipesPage() {
 
       {recipes.length > 0 && (
         <div className="relative mb-8">
-          <div className="flex items-center gap-2 bg-white rounded-full shadow-soft border border-surface-300/60 pr-2 pl-2 py-2">
+          <div className="flex items-center gap-2 bg-surface-50 rounded-full shadow-soft border border-surface-300/60 pr-2 pl-2 py-2">
             <div className="h-9 w-9 rounded-full bg-surface-200 text-ink-700 flex items-center justify-center shrink-0">
               <Search className="h-4 w-4" />
             </div>
@@ -93,7 +93,7 @@ export default function RecipesPage() {
           }
         />
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-3xl shadow-soft py-16 text-center">
+        <div className="bg-surface-50 rounded-3xl shadow-soft py-16 text-center">
           <p className="text-ink-700 text-sm">לא נמצאו מתכונים התואמים לחיפוש</p>
         </div>
       ) : (

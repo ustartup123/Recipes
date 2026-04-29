@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Rubik, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
-import { Toaster } from "react-hot-toast";
+import { ThemeProvider } from "@/context/ThemeContext";
+import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import { checkServerEnv } from "@/lib/env-check";
 
 const rubik = Rubik({
@@ -29,36 +30,47 @@ export const metadata: Metadata = {
   description: "ספריית המתכונים האישית שלי",
 };
 
+// Inline FOUC-prevention script. Runs synchronously before React hydrates so
+// the correct theme class is on <html> on first paint. Wrapped in try/catch
+// so a private-mode storage exception cannot crash app boot.
+const themeBootScript = `
+(function () {
+  try {
+    var stored = null;
+    try { stored = localStorage.getItem('recipes:theme-mode'); } catch (e) {}
+    var mode = (stored === 'light' || stored === 'dark' || stored === 'auto') ? stored : 'auto';
+    var prefersDark = false;
+    try { prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}
+    var resolved = mode === 'dark' || (mode === 'auto' && prefersDark) ? 'dark' : 'light';
+    var html = document.documentElement;
+    if (resolved === 'dark') html.classList.add('dark'); else html.classList.remove('dark');
+    html.style.colorScheme = resolved;
+  } catch (e) {}
+})();
+`.trim();
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className={`${rubik.variable} ${dmSans.variable}`}>
+    <html
+      lang="he"
+      dir="rtl"
+      className={`${rubik.variable} ${dmSans.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="min-h-screen bg-surface-100">
-        <AuthProvider>
-          {children}
-          <Toaster
-            position="bottom-left"
-            toastOptions={{
-              style: {
-                background: "#ffffff",
-                color: "#1a2332",
-                border: "1px solid #e8dfd6",
-                borderRadius: "16px",
-                fontSize: "14px",
-                boxShadow: "0 14px 40px -18px rgba(26, 35, 50, 0.25)",
-              },
-              success: {
-                iconTheme: { primary: "#e07a33", secondary: "#ffffff" },
-              },
-              error: {
-                iconTheme: { primary: "#dc2626", secondary: "#ffffff" },
-              },
-            }}
-          />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+            <ThemedToaster />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

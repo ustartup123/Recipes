@@ -41,12 +41,12 @@ export function Navbar() {
             </Link>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1 bg-white/60 p-1 rounded-full shadow-soft border border-surface-300/50">
+            <div className="hidden md:flex items-center gap-1 bg-surface-50/60 p-1 rounded-full shadow-soft border border-surface-300/50">
               {navItems.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium text-ink-700 hover:text-ink-900 hover:bg-white transition-all duration-150"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium text-ink-700 hover:text-ink-900 hover:bg-surface-50 transition-all duration-150"
                 >
                   <Icon className="h-4 w-4" />
                   {label}
@@ -59,7 +59,7 @@ export function Navbar() {
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-surface-50 transition-colors cursor-pointer"
                   aria-label="User menu"
                 >
                   {user?.photoURL ? (
@@ -68,7 +68,7 @@ export function Navbar() {
                       alt={user.displayName || "User"}
                       width={32}
                       height={32}
-                      className="rounded-full border-2 border-white shadow-soft"
+                      className="rounded-full border-2 border-surface-50 shadow-soft"
                     />
                   ) : (
                     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-sage-500 to-sage-300 flex items-center justify-center text-white text-xs font-bold shadow-soft">
@@ -82,7 +82,7 @@ export function Navbar() {
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-hover py-2 z-50 animate-fade-in border border-surface-300/60">
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-surface-50 rounded-2xl shadow-hover py-2 z-50 animate-fade-in border border-surface-300/60">
                     <div className="px-4 py-2.5 border-b border-surface-300">
                       <p className="text-sm font-semibold text-ink-900 truncate">
                         {user?.displayName}
@@ -115,7 +115,7 @@ export function Navbar() {
               {navItems.length > 0 && (
                 <button
                   onClick={() => setMobileOpen(!mobileOpen)}
-                  className="md:hidden p-2 rounded-full hover:bg-white text-ink-700 cursor-pointer transition-colors"
+                  className="md:hidden p-2 rounded-full hover:bg-surface-50 text-ink-700 cursor-pointer transition-colors"
                   aria-label="Toggle mobile menu"
                 >
                   {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -127,7 +127,7 @@ export function Navbar() {
 
         {/* Mobile nav */}
         {mobileOpen && navItems.length > 0 && (
-          <div className="md:hidden border-t border-surface-300/60 bg-white/80 backdrop-blur-md px-4 py-3">
+          <div className="md:hidden border-t border-surface-300/60 bg-surface-50/80 backdrop-blur-md px-4 py-3">
             <div className="flex flex-col gap-1">
               {navItems.map(({ href, label, icon: Icon }) => (
                 <Link

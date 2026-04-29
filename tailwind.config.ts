@@ -1,5 +1,11 @@
 import type { Config } from "tailwindcss";
 
+// Each color token resolves to a CSS variable carrying space-separated RGB
+// channels. Light defaults live in :root (app/globals.css); dark overrides
+// live in :root.dark. Tailwind's `<alpha-value>` slot keeps `bg-foo/50`
+// etc. working without any per-component changes.
+const rgb = (name: string) => `rgb(var(--color-${name}) / <alpha-value>)`;
+
 const config: Config = {
   darkMode: "class",
   content: [
@@ -10,49 +16,44 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Blush-based surfaces
         surface: {
-          50:  "#ffffff",
-          100: "#faf6f3", // blush (body bg)
-          200: "#f0e9e2", // deep blush
-          300: "#e8dfd6", // rule / hairline
+          50:  rgb("surface-50"),
+          100: rgb("surface-100"),
+          200: rgb("surface-200"),
+          300: rgb("surface-300"),
         },
-        // Warm orange primary
         brand: {
-          300: "#f0a46a",
-          400: "#ec8c48",
-          500: "#e07a33",
-          600: "#c86825",
-          700: "#a05618",
+          300: rgb("brand-300"),
+          400: rgb("brand-400"),
+          500: rgb("brand-500"),
+          600: rgb("brand-600"),
+          700: rgb("brand-700"),
         },
-        // Sage secondary
         sage: {
-          100: "#eef2eb",
-          200: "#dfe7db",
-          300: "#c6d3c0",
-          500: "#8fa78c",
-          600: "#718d6e",
-          700: "#55705a",
+          100: rgb("sage-100"),
+          200: rgb("sage-200"),
+          300: rgb("sage-300"),
+          500: rgb("sage-500"),
+          600: rgb("sage-600"),
+          700: rgb("sage-700"),
         },
-        // Accent tag colors
         peach: {
-          200: "#ffe3cc",
-          300: "#ffd6b5",
-          700: "#8a4a18",
+          200: rgb("peach-200"),
+          300: rgb("peach-300"),
+          700: rgb("peach-700"),
         },
         lavender: {
-          200: "#e5dff5",
-          300: "#d9d0f0",
-          700: "#4b3d82",
+          200: rgb("lavender-200"),
+          300: rgb("lavender-300"),
+          700: rgb("lavender-700"),
         },
-        // Navy ink
         ink: {
-          900: "#1a2332",
-          800: "#2a3545",
-          700: "#5a6472",
-          500: "#9aa4b2",
-          400: "#b6bec8",
-          300: "#d3d8df",
+          900: rgb("ink-900"),
+          800: rgb("ink-800"),
+          700: rgb("ink-700"),
+          500: rgb("ink-500"),
+          400: rgb("ink-400"),
+          300: rgb("ink-300"),
         },
       },
       fontFamily: {
@@ -79,10 +80,10 @@ const config: Config = {
         },
       },
       boxShadow: {
-        soft: "0 1px 0 rgba(26, 35, 50, 0.04)",
-        pop: "0 14px 40px -18px rgba(26, 35, 50, 0.25)",
-        hover: "0 20px 50px -20px rgba(26, 35, 50, 0.35)",
-        cta: "0 4px 14px -4px rgba(224, 122, 51, 0.45)",
+        soft: "0 1px 0 rgb(var(--color-shadow-rgb) / 0.04)",
+        pop: "0 14px 40px -18px rgb(var(--color-shadow-rgb) / 0.25)",
+        hover: "0 20px 50px -20px rgb(var(--color-shadow-rgb) / 0.35)",
+        cta: "0 4px 14px -4px rgb(var(--color-cta-shadow-rgb) / 0.45)",
       },
     },
   },

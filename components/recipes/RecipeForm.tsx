@@ -230,7 +230,7 @@ export function RecipeForm({ initial, loading, onSubmit }: Props) {
 
       <div>
         <label className="input-label">תגיות</label>
-        <div className="flex flex-wrap items-center gap-2 bg-white border border-surface-300 rounded-2xl px-3 py-2.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
+        <div className="flex flex-wrap items-center gap-2 bg-surface-50 border border-surface-300 rounded-2xl px-3 py-2.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20 transition-all">
           {tags.map((tag, i) => (
             <span
               key={i}

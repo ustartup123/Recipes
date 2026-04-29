@@ -2,15 +2,141 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ----------------------------------------------------------------------- */
+/*  Theme tokens                                                           */
+/*                                                                          */
+/*  Each color is a space-separated RGB triplet so Tailwind's              */
+/*  `<alpha-value>` slot keeps `bg-foo/50` and friends working.            */
+/*  Light defaults below; :root.dark overrides them. ThemeProvider toggles */
+/*  the .dark class on <html>; the inline FOUC script in layout.tsx        */
+/*  applies it before React hydrates so there's no flash.                  */
+/* ----------------------------------------------------------------------- */
 :root {
   --font-rubik: 'Rubik', system-ui, sans-serif;
   --font-dm-sans: 'DM Sans', system-ui, sans-serif;
+
+  /* Surface (page + card hierarchy) */
+  --color-surface-50:  255 255 255;
+  --color-surface-100: 250 246 243; /* blush body bg */
+  --color-surface-200: 240 233 226;
+  --color-surface-300: 232 223 214;
+
+  /* Brand (warm orange) */
+  --color-brand-300: 240 164 106;
+  --color-brand-400: 236 140 72;
+  --color-brand-500: 224 122 51;
+  --color-brand-600: 200 104 37;
+  --color-brand-700: 160 86 24;
+
+  /* Sage */
+  --color-sage-100: 238 242 235;
+  --color-sage-200: 223 231 219;
+  --color-sage-300: 198 211 192;
+  --color-sage-500: 143 167 140;
+  --color-sage-600: 113 141 110;
+  --color-sage-700: 85 112 90;
+
+  /* Peach accent */
+  --color-peach-200: 255 227 204;
+  --color-peach-300: 255 214 181;
+  --color-peach-700: 138 74 24;
+
+  /* Lavender accent */
+  --color-lavender-200: 229 223 245;
+  --color-lavender-300: 217 208 240;
+  --color-lavender-700: 75 61 130;
+
+  /* Ink (typography + dark accent surfaces) */
+  --color-ink-900: 26 35 50;
+  --color-ink-800: 42 53 69;
+  --color-ink-700: 90 100 114;
+  --color-ink-500: 154 164 178;
+  --color-ink-400: 182 190 200;
+  --color-ink-300: 211 216 223;
+
+  /* Shadows */
+  --color-shadow-rgb: 26 35 50;
+  --color-cta-shadow-rgb: 224 122 51;
+
+  /* Scrollbar (light) */
+  --scrollbar-thumb: 198 211 192;
+  --scrollbar-track: 240 233 226;
+  --scrollbar-thumb-rgb: 211 216 223;
+  --scrollbar-thumb-hover-rgb: 182 190 200;
+
+  /* Recharts tooltip */
+  --recharts-tooltip-bg: 255 255 255;
+  --recharts-tooltip-border: 232 223 214;
+  --recharts-tooltip-text: 26 35 50;
+
+  /* Shimmer (skeleton) */
+  --shimmer-stop-1: 240 233 226;
+  --shimmer-stop-2: 232 223 214;
+}
+
+/* Dark theme — warm charcoal, NOT cool slate. Preserves Soft Modern warmth. */
+:root.dark {
+  --color-surface-50:  36 29 24;   /* elevated card */
+  --color-surface-100: 26 20 16;   /* page bg (warm charcoal #1a1410) */
+  --color-surface-200: 36 29 24;   /* heavier surface #241d18 */
+  --color-surface-300: 46 38 32;   /* rule / hairline #2e2620 */
+
+  /* Brand on dark — slightly desaturated, lighter orange (Choice 2 / Subagent Q5) */
+  --color-brand-300: 240 164 106;
+  --color-brand-400: 236 152 90;
+  --color-brand-500: 232 138 76;   /* #e88a4c */
+  --color-brand-600: 209 138 85;
+  --color-brand-700: 178 104 48;
+
+  /* Sage — desaturated for dark */
+  --color-sage-100: 31 42 33;
+  --color-sage-200: 44 58 46;
+  --color-sage-300: 58 77 60;
+  --color-sage-500: 122 149 119;
+  --color-sage-600: 107 134 105;
+  --color-sage-700: 90 112 89;
+
+  /* Peach — roles invert for tag chips */
+  --color-peach-200: 74 47 26;
+  --color-peach-300: 90 58 31;     /* dark warm bg */
+  --color-peach-700: 240 200 154;  /* light warm text */
+
+  /* Lavender — same role flip */
+  --color-lavender-200: 42 37 64;
+  --color-lavender-300: 46 40 64;
+  --color-lavender-700: 214 205 240;
+
+  /* Ink — inverts: 900 becomes the warm off-white foreground */
+  --color-ink-900: 245 237 228;
+  --color-ink-800: 232 223 208;
+  --color-ink-700: 188 177 164;
+  --color-ink-500: 138 127 115;
+  --color-ink-400: 90 79 68;
+  --color-ink-300: 62 53 48;
+
+  /* Shadows — deeper in dark, slight warm cast */
+  --color-shadow-rgb: 0 0 0;
+  --color-cta-shadow-rgb: 232 138 76;
+
+  /* Scrollbar (dark) */
+  --scrollbar-thumb: 90 79 68;
+  --scrollbar-track: 36 29 24;
+  --scrollbar-thumb-rgb: 90 79 68;
+  --scrollbar-thumb-hover-rgb: 138 127 115;
+
+  /* Recharts tooltip (dark) */
+  --recharts-tooltip-bg: 36 29 24;
+  --recharts-tooltip-border: 46 38 32;
+  --recharts-tooltip-text: 245 237 228;
+
+  /* Shimmer (dark) */
+  --shimmer-stop-1: 36 29 24;
+  --shimmer-stop-2: 46 38 32;
 }
 
 html {
-  color-scheme: light;
   scrollbar-width: thin;
-  scrollbar-color: #c6d3c0 #f0e9e2;
+  scrollbar-color: rgb(var(--scrollbar-thumb)) rgb(var(--scrollbar-track));
 }
 
 @layer base {
@@ -25,6 +151,14 @@ html {
     letter-spacing: -0.015em;
   }
 
+  /* Visited link distinction — preserved in both modes */
+  a:visited {
+    color: rgb(var(--color-brand-700));
+  }
+  :root.dark a:visited {
+    color: rgb(var(--color-brand-300));
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -33,13 +167,13 @@ html {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #d3d8df;
+    background: rgb(var(--scrollbar-thumb-rgb));
     border-radius: 9999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #b6bec8;
+    background: rgb(var(--scrollbar-thumb-hover-rgb));
     background-clip: padding-box;
   }
 }
@@ -47,10 +181,10 @@ html {
 @layer components {
   /* Surfaces */
   .card {
-    @apply bg-white rounded-3xl shadow-soft;
+    @apply bg-surface-50 rounded-3xl shadow-soft;
   }
   .card-hover {
-    @apply bg-white rounded-3xl shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-hover cursor-pointer;
+    @apply bg-surface-50 rounded-3xl shadow-soft transition-all duration-200 hover:-translate-y-1 hover:shadow-hover cursor-pointer;
   }
   .card-muted {
     @apply bg-surface-200 rounded-3xl;
@@ -58,7 +192,7 @@ html {
 
   /* Inputs */
   .input {
-    @apply w-full bg-white border border-surface-300 rounded-2xl px-4 py-2.5 text-ink-900 text-sm
+    @apply w-full bg-surface-50 border border-surface-300 rounded-2xl px-4 py-2.5 text-ink-900 text-sm
            placeholder-ink-500 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20
            transition-all duration-150;
   }
@@ -68,7 +202,7 @@ html {
 
   /* Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 text-white font-medium
+    @apply inline-flex items-center justify-center gap-2 bg-ink-900 hover:bg-ink-800 text-surface-100 font-medium
            rounded-full px-5 py-2.5 text-sm shadow-cta transition-all duration-150 cursor-pointer
            focus:outline-none focus:ring-2 focus:ring-brand-500/40
            disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
@@ -77,7 +211,7 @@ html {
     @apply inline-flex items-center justify-center h-6 w-6 rounded-full bg-brand-500 text-white text-sm font-bold leading-none;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 bg-white hover:bg-surface-200 text-ink-900 font-medium
+    @apply inline-flex items-center justify-center gap-2 bg-surface-50 hover:bg-surface-200 text-ink-900 font-medium
            rounded-full px-5 py-2.5 text-sm border border-surface-300 transition-all duration-150 cursor-pointer
            focus:outline-none focus:ring-2 focus:ring-ink-500/30
            disabled:opacity-50 disabled:cursor-not-allowed;
@@ -91,7 +225,8 @@ html {
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700
            font-medium rounded-full px-5 py-2.5 text-sm border border-red-200 transition-all duration-150 cursor-pointer
-           focus:outline-none focus:ring-2 focus:ring-red-500/30;
+           focus:outline-none focus:ring-2 focus:ring-red-500/30
+           dark:bg-red-950/40 dark:hover:bg-red-950/60 dark:text-red-300 dark:hover:text-red-200 dark:border-red-900/60;
   }
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 hover:bg-surface-200 text-ink-700 hover:text-ink-900
@@ -100,11 +235,11 @@ html {
 
   /* Pill chips (filters, tabs) */
   .chip {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-ink-700 text-sm font-medium
+    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-50 text-ink-700 text-sm font-medium
            shadow-soft cursor-pointer transition-all duration-150 hover:bg-surface-200;
   }
   .chip-active {
-    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ink-900 text-white text-sm font-medium
+    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-ink-900 text-surface-100 text-sm font-medium
            shadow-soft cursor-pointer transition-all duration-150;
   }
 
@@ -136,10 +271,10 @@ html {
 }
 
 .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background-color: #ffffff !important;
-  border: 1px solid #e8dfd6 !important;
+  background-color: rgb(var(--recharts-tooltip-bg)) !important;
+  border: 1px solid rgb(var(--recharts-tooltip-border)) !important;
   border-radius: 16px !important;
-  color: #1a2332 !important;
+  color: rgb(var(--recharts-tooltip-text)) !important;
   font-size: 12px !important;
 }
 
@@ -148,7 +283,12 @@ html {
   100% { background-position: 200% 0; }
 }
 .shimmer {
-  background: linear-gradient(90deg, #f0e9e2 25%, #e8dfd6 50%, #f0e9e2 75%);
+  background: linear-gradient(
+    90deg,
+    rgb(var(--shimmer-stop-1)) 25%,
+    rgb(var(--shimmer-stop-2)) 50%,
+    rgb(var(--shimmer-stop-1)) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

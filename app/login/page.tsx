@@ -46,7 +46,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-surface-100 flex items-center justify-center p-6">
       {/* Soft decorative gradients */}
       <div
-        className="fixed inset-0 -z-10 overflow-hidden pointer-events-none"
+        className="fixed inset-0 -z-10 overflow-hidden pointer-events-none dark:opacity-30"
         aria-hidden="true"
       >
         <div className="absolute top-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-peach-300/60 blur-3xl" />
@@ -75,7 +75,7 @@ export default function LoginPage() {
 
           <button
             onClick={handleSignIn}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-surface-200 text-ink-900 font-semibold rounded-full px-6 py-3.5 transition-all duration-150 cursor-pointer shadow-soft border border-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+            className="w-full flex items-center justify-center gap-3 bg-surface-50 hover:bg-surface-200 text-ink-900 font-semibold rounded-full px-6 py-3.5 transition-all duration-150 cursor-pointer shadow-soft border border-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path

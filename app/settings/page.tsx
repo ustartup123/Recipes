@@ -2,8 +2,9 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { APP_VERSION } from "@/lib/version";
-import { Settings, User } from "lucide-react";
+import { Settings, User, Palette } from "lucide-react";
 import Image from "next/image";
 
 export default function SettingsPage() {
@@ -34,7 +35,7 @@ export default function SettingsPage() {
                 alt={user.displayName || "User"}
                 width={64}
                 height={64}
-                className="rounded-2xl border-2 border-white shadow-soft"
+                className="rounded-2xl border-2 border-surface-50 shadow-soft"
               />
             ) : (
               <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-sage-500 to-sage-300 flex items-center justify-center text-white text-2xl font-bold shadow-soft">
@@ -51,6 +52,20 @@ export default function SettingsPage() {
             <button onClick={signOut} className="btn-danger text-sm">
               Sign Out
             </button>
+          </div>
+        </div>
+
+        {/* Display (theme) */}
+        <div className="card p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Palette className="h-4 w-4 text-ink-700" />
+            <h2 className="font-bold text-ink-900 text-base">תצוגה</h2>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <ThemeToggle />
+            <p className="text-xs text-ink-500">
+              &quot;אוטומטי&quot; עוקב אחר הגדרת מערכת ההפעלה
+            </p>
           </div>
         </div>
 

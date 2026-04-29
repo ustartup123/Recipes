@@ -35,13 +35,13 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink-900/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         className={cn(
-          "relative w-full bg-white rounded-3xl shadow-hover",
+          "relative w-full bg-surface-50 rounded-3xl shadow-hover",
           "animate-[slideUp_0.2s_ease-out]",
           sizeClass
         )}
