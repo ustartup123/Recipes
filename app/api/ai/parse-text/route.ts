@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { verifyAuthToken } from "@/lib/firebase-admin";
 import {
-  callGeminiWithRetry,
+  callGeminiWithFallback,
   GeminiError,
   classifyGeminiError,
 } from "@/lib/gemini";
@@ -39,15 +39,18 @@ export async function POST(req: NextRequest) {
       userLog.error("config: GEMINI_API_KEY is not set");
       throw new Error("GEMINI_API_KEY is not set");
     }
-    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-      model: "gemini-2.5-flash",
+    const ai = new GoogleGenerativeAI(apiKey);
+    const primaryModel = ai.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const fallbackModel = ai.getGenerativeModel({
+      model: "gemini-flash-latest",
     });
 
     const prompt = `[app:recipes-app][user:${decoded.uid}]\n\n${textPrompt(text)}`;
     userLog.info({ promptChars: prompt.length }, "gemini: prompt built");
 
-    const result = await callGeminiWithRetry(
-      () => model.generateContent(prompt),
+    const result = await callGeminiWithFallback(
+      () => primaryModel.generateContent(prompt),
+      () => fallbackModel.generateContent(prompt),
       userLog,
     );
     const responseText = result.response.text();

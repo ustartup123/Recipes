@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { callGeminiWithRetry, classifyGeminiError, GeminiError } from "@/lib/gemini";
+import {
+  callGeminiWithRetry,
+  callGeminiWithFallback,
+  classifyGeminiError,
+  GeminiError,
+} from "@/lib/gemini";
 
 describe("classifyGeminiError", () => {
   it("classifies 503 / overloaded errors", () => {
@@ -111,4 +116,66 @@ describe("callGeminiWithRetry", () => {
       expect.stringContaining("Attempt 1 failed"),
     );
   });
+});
+
+describe("callGeminiWithFallback", () => {
+  it("uses primary when it succeeds — fallback is never called", async () => {
+    const mockResult = { response: { text: () => "ok" } };
+    const primary = vi.fn().mockResolvedValue(mockResult);
+    const fallback = vi.fn();
+
+    const result = await callGeminiWithFallback(primary, fallback);
+
+    expect(result).toBe(mockResult);
+    expect(primary).toHaveBeenCalledTimes(1);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it("falls back to secondary when primary returns sustained 503", async () => {
+    const mockResult = { response: { text: () => "from-fallback" } };
+    const primary = vi.fn().mockRejectedValue(new Error("503 overloaded"));
+    const fallback = vi.fn().mockResolvedValue(mockResult);
+
+    const result = await callGeminiWithFallback(primary, fallback);
+
+    expect(result).toBe(mockResult);
+    // primary: 1 initial + 3 retries before giving up
+    expect(primary).toHaveBeenCalledTimes(4);
+    // fallback: succeeds on first try
+    expect(fallback).toHaveBeenCalledTimes(1);
+  }, 15000);
+
+  it("falls back on sustained 429 (rate limit)", async () => {
+    const mockResult = { response: { text: () => "ok" } };
+    const primary = vi.fn().mockRejectedValue(new Error("429 RESOURCE_EXHAUSTED"));
+    const fallback = vi.fn().mockResolvedValue(mockResult);
+
+    const result = await callGeminiWithFallback(primary, fallback);
+
+    expect(result).toBe(mockResult);
+    expect(fallback).toHaveBeenCalledTimes(1);
+  }, 15000);
+
+  it("does NOT fall back on non-overload errors (e.g. 400)", async () => {
+    const primary = vi.fn().mockRejectedValue(new Error("400 INVALID_ARGUMENT"));
+    const fallback = vi.fn();
+
+    await expect(callGeminiWithFallback(primary, fallback)).rejects.toThrow(
+      GeminiError,
+    );
+    // 400 is not retryable, so primary called once
+    expect(primary).toHaveBeenCalledTimes(1);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it("propagates fallback failure when both models fail", async () => {
+    const primary = vi.fn().mockRejectedValue(new Error("503 overloaded"));
+    const fallback = vi.fn().mockRejectedValue(new Error("503 overloaded"));
+
+    await expect(callGeminiWithFallback(primary, fallback)).rejects.toThrow(
+      GeminiError,
+    );
+    expect(primary).toHaveBeenCalledTimes(4);
+    expect(fallback).toHaveBeenCalledTimes(4);
+  }, 30000);
 });

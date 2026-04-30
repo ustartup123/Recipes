@@ -143,3 +143,43 @@ export async function callGeminiWithRetry(
   }
   throw new GeminiError(classified, lastError);
 }
+
+/**
+ * Call Gemini with a primary model, falling back to a secondary model if
+ * the primary is overloaded (503) or rate-limited (429) even after retries.
+ *
+ * Real-world driver: `gemini-2.5-flash` periodically returns sustained 503s
+ * for prompts of recipe-extraction size (~5KB) while sibling models like
+ * `gemini-flash-latest` are unaffected. The retry alone (1s + 2s + 4s)
+ * cannot ride out an outage that lasts minutes, so a fallback model is the
+ * only way to keep recipe imports working.
+ *
+ * Non-overload errors (4xx, auth, etc.) are NOT retried against the
+ * fallback — those would just fail again.
+ *
+ * @param primary  – generateContent() against the preferred model
+ * @param fallback – generateContent() against the fallback model
+ * @param log      – optional logger
+ */
+export async function callGeminiWithFallback(
+  primary: () => Promise<GenerateContentResult>,
+  fallback: () => Promise<GenerateContentResult>,
+  log?: RetryLog,
+): Promise<GenerateContentResult> {
+  try {
+    return await callGeminiWithRetry(primary, log);
+  } catch (err) {
+    if (
+      err instanceof GeminiError &&
+      (err.status === 503 || err.status === 429)
+    ) {
+      if (log?.warn) {
+        log.warn(
+          `[Gemini] primary model overloaded (status ${err.status}); falling back to secondary model`,
+        );
+      }
+      return await callGeminiWithRetry(fallback, log);
+    }
+    throw err;
+  }
+}
