@@ -93,6 +93,84 @@ function extractYouTubeDescription(
   return null;
 }
 
+/**
+ * Browser-like request headers. Data-center IPs (Vercel functions) get
+ * flagged by bot-protection layers such as Akamai/Cloudflare when the request
+ * looks non-browser. Sending the full set of navigation headers a real Chrome
+ * emits — `Sec-Fetch-*`, client hints, `Upgrade-Insecure-Requests` — clears
+ * the header-based rules that reject bare `fetch()` calls. It does NOT defeat
+ * JS-challenge walls (those need a real browser), so callers must still handle
+ * a 403.
+ */
+function browserHeaders(host: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
+    "Accept-Encoding": "identity",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "sec-ch-ua":
+      '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+  };
+  // YouTube serves an EU-consent / bot-check shell (no ytInitialPlayerResponse)
+  // to data-center IPs. Pre-set the consent cookies so we get the real watch
+  // page on first try; the server-side InnerTube fallback handles the rest.
+  if (isYouTubeHost(host)) {
+    headers["Cookie"] = "CONSENT=YES+1; SOCS=CAI; PREF=hl=he&gl=IL";
+  }
+  return headers;
+}
+
+/**
+ * Flatten a response's Set-Cookie header(s) into a `name=value; name=value`
+ * Cookie string. Uses the undici `getSetCookie()` accessor when available
+ * (it splits multiple cookies correctly, unlike `.get("set-cookie")` which
+ * comma-joins them and mangles `Expires` dates).
+ */
+function cookiesFromResponse(response: Response): string {
+  const anyHeaders = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+  const raw =
+    typeof anyHeaders.getSetCookie === "function"
+      ? anyHeaders.getSetCookie()
+      : (() => {
+          const single = response.headers.get("set-cookie");
+          return single ? [single] : [];
+        })();
+  const pairs: string[] = [];
+  for (const cookie of raw) {
+    const first = cookie.split(";")[0]?.trim();
+    if (first && first.includes("=")) pairs.push(first);
+  }
+  return pairs.join("; ");
+}
+
+async function fetchOnce(
+  url: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    return await fetch(url, {
+      headers,
+      signal: controller.signal,
+      redirect: "follow",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function fetchUrl(
   rawUrl: string,
   log: LogLike = NOOP_LOG,
@@ -105,34 +183,35 @@ export async function fetchUrl(
     throw new Error(`Invalid URL: ${rawUrl}`);
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  const headers: Record<string, string> = {
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
-    "Accept-Encoding": "identity",
-  };
-
   const host = hostOf(url);
-  // YouTube serves an EU-consent / bot-check shell (no ytInitialPlayerResponse)
-  // to data-center IPs. Pre-set the consent cookies so we get the real watch
-  // page on first try; the server-side InnerTube fallback handles the rest.
-  if (isYouTubeHost(host)) {
-    headers["Cookie"] = "CONSENT=YES+1; SOCS=CAI; PREF=hl=he&gl=IL";
-  }
+  const headers = browserHeaders(host);
   const start = startTimer();
   log.info({ host }, "fetchUrl: start");
 
   try {
-    const response = await fetch(url, {
-      headers,
-      signal: controller.signal,
-      redirect: "follow",
-    });
-    clearTimeout(timeout);
+    let response = await fetchOnce(url, headers);
+
+    // Bot-protection (Akamai/Cloudflare) frequently answers the first bare
+    // request with 403/429 while handing back a sensor cookie, then admits
+    // the retry that echoes it. Replay that cookie once with a same-origin
+    // Referer before giving up. A JS-challenge wall still won't yield here.
+    if (response.status === 403 || response.status === 429) {
+      const cookies = cookiesFromResponse(response);
+      if (cookies) {
+        const retryHeaders: Record<string, string> = {
+          ...headers,
+          Cookie: [headers.Cookie, cookies].filter(Boolean).join("; "),
+          Referer: `${new URL(url).origin}/`,
+          "Sec-Fetch-Site": "same-origin",
+        };
+        log.warn(
+          { host, status: response.status },
+          "fetchUrl: bot-wall on first try, retrying with sensor cookie",
+        );
+        response = await fetchOnce(url, retryHeaders);
+      }
+    }
+
     if (!response.ok) {
       log.warn(
         {
@@ -157,7 +236,6 @@ export async function fetchUrl(
     );
     return body;
   } catch (error) {
-    clearTimeout(timeout);
     if (error instanceof Error && error.name === "AbortError") {
       log.warn(
         { host, durationMs: elapsedMs(start) },

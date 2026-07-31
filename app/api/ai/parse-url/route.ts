@@ -53,16 +53,19 @@ export async function POST(req: NextRequest) {
       html = await fetchUrl(url, userLog);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // Bot-protected sites (e.g. Akamai-fronted portals like mako.co.il)
+      // reject server-side fetches with 403/429 no matter the headers. Steer
+      // the user to the reliable fallback: copy the recipe and use the
+      // "מטקסט" (from text) import.
+      const blocked = /HTTP (403|429)\b/.test(msg);
+      const userMessage = blocked
+        ? "האתר חוסם ייבוא אוטומטי מהקישור. העתיקו את טקסט המתכון והשתמשו בייבוא „מטקסט”."
+        : `שגיאה בשליפת הקישור: ${msg}. ייתכן שהאתר חוסם גישה אוטומטית — נסו לייבא „מטקסט”.`;
       userLog.warn(
-        { host, durationMs: elapsedMs(start), err: serializeError(err) },
+        { host, blocked, durationMs: elapsedMs(start), err: serializeError(err) },
         "request: aborted — fetchUrl failed",
       );
-      return NextResponse.json(
-        {
-          error: `Failed to fetch URL: ${msg}. The site may be blocking automated access.`,
-        },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: userMessage }, { status: 400 });
     }
     if (!html || html.length < 100) {
       userLog.warn(
