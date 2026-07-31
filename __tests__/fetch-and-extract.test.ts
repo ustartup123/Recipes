@@ -233,6 +233,100 @@ describe("fetchUrl", () => {
     expect(headers["Cookie"]).toBeUndefined();
     fetchSpy.mockRestore();
   });
+
+  it("sends browser-like navigation headers (Sec-Fetch / client hints)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("<html></html>", { status: 200 }),
+    );
+    await fetchUrl("https://www.mako.co.il/food-recipes/x.htm");
+    const headers = fetchSpy.mock.calls[0][1]!.headers as Record<
+      string,
+      string
+    >;
+    expect(headers["Sec-Fetch-Mode"]).toBe("navigate");
+    expect(headers["Upgrade-Insecure-Requests"]).toBe("1");
+    expect(headers["sec-ch-ua"]).toContain("Chromium");
+    fetchSpy.mockRestore();
+  });
+
+  // happy-dom's Response drops Set-Cookie (a forbidden response header), so
+  // build a minimal Response-shaped stub to exercise the cookie-priming retry
+  // deterministically. In production (undici) getSetCookie() carries it.
+  function stubResponse(opts: {
+    status: number;
+    body?: string;
+    setCookie?: string;
+  }): Response {
+    const { status, body = "", setCookie } = opts;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 403 ? "Forbidden" : "",
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === "set-cookie" ? setCookie ?? null : null,
+        getSetCookie: () => (setCookie ? [setCookie] : []),
+      },
+      text: async () => body,
+    } as unknown as Response;
+  }
+
+  it("retries a 403 with the sensor cookie and a same-origin Referer", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        stubResponse({
+          status: 403,
+          body: "blocked",
+          setCookie: "ak_bmsc=abc123; Path=/; HttpOnly",
+        }),
+      )
+      .mockResolvedValueOnce(
+        stubResponse({ status: 200, body: "<html><body>ok</body></html>" }),
+      );
+    const body = await fetchUrl("https://www.mako.co.il/food-recipes/x.htm");
+    expect(body).toContain("ok");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const retryHeaders = fetchSpy.mock.calls[1][1]!.headers as Record<
+      string,
+      string
+    >;
+    expect(retryHeaders["Cookie"]).toContain("ak_bmsc=abc123");
+    expect(retryHeaders["Referer"]).toBe("https://www.mako.co.il/");
+    expect(retryHeaders["Sec-Fetch-Site"]).toBe("same-origin");
+    fetchSpy.mockRestore();
+  });
+
+  it("does not retry a 403 that sets no cookie, and surfaces HTTP 403", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(stubResponse({ status: 403, body: "blocked" }));
+    await expect(
+      fetchUrl("https://www.mako.co.il/food-recipes/x.htm"),
+    ).rejects.toThrow(/HTTP 403/);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it("throws HTTP 403 when the cookie retry is also blocked", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        stubResponse({
+          status: 403,
+          body: "blocked",
+          setCookie: "ak_bmsc=abc; Path=/",
+        }),
+      )
+      .mockResolvedValueOnce(
+        stubResponse({ status: 403, body: "still blocked" }),
+      );
+    await expect(
+      fetchUrl("https://www.mako.co.il/food-recipes/x.htm"),
+    ).rejects.toThrow(/HTTP 403/);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    fetchSpy.mockRestore();
+  });
 });
 
 describe("extractYouTubeVideoId", () => {
